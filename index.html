@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>NHS Infrastructure Map</title>
+
+  <!-- Leaflet CSS -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
+
+  <!-- Our custom CSS -->
+  <link rel="stylesheet" href="style.css" />
+
+  <meta http-equiv="Content-Security-Policy"
+        content="script-src 'self' https://unpkg.com; 
+                 style-src 'self' https://unpkg.com 'unsafe-inline'; 
+                 img-src 'self' data: https://*.tile.openstreetmap.org https://unpkg.com;">
+</head>
+<body>
+  <div class="app-container">
+    <!-- ───────────────────────────────────────────────────────────────────────── -->
+    <!-- Title Bar -->
+    <!-- ───────────────────────────────────────────────────────────────────────── -->
+    <div class="title-bar">
+      <h1>NHS Infrastructure Map</h1>
+      <div class="buttons-bar">
+        <button id="btnSwitchToList">Switch to List</button>
+        <button
+          id="btnPriorityMap"
+          title="Priority Map: 1 (High) → Red; 2 → Orange; 3 → Yellow; 4 → Green; 5 (Low) → Blue; None → Grey"
+        >
+          Priority Map
+        </button>        
+        <button id="btnRepairsPriority">Repairs Priority</button>
+        <button id="btnDownload">Download</button>
+
+        <div id="listViewControls" style="display: none; align-items: center; margin-left: 10px;">
+          <label for="sortSelect" style="margin-right:4px;">Sort by:</label>
+          <select id="sortSelect" title="Sort list view">
+            <option value="category">By Category</option>
+            <option value="name-asc">A → Z</option>
+            <option value="name-desc">Z → A</option>
+            <option value="location">By Location</option>
+          </select>
+        </div>
+
+        <!-- after your listViewControls div -->
+        <div id="repairsViewControls" style="display:none; align-items:center; margin-left:10px;">
+          <label for="repairsSortSelect" style="margin-right:4px;">Sort by:</label>
+          <select id="repairsSortSelect">
+            <option value="repairPriority">Repair Priority</option>
+            <option value="repairCost">Repair Cost</option>
+            <option value="frequency">Frequency</option>
+            <option value="location">Location</option>
+          </select>
+        </div>
+
+
+      </div>
+    </div>
+
+    <!-- ───────────────────────────────────────────────────────────────────────── -->
+    <!-- Main View Wrapper: Filter Panel + Map/List + Details Panel -->
+    <!-- ───────────────────────────────────────────────────────────────────────── -->
+    <div class="main-view-wrapper" id="mainViewWrapper">
+      <div class="main-content" id="mainContentArea">
+        <!-- Left Filter Panel -->
+        <div class="left-panel" id="filterPanel">
+          <h2>Filters</h2>
+        </div>
+        <button
+          class="panel-toggle-button"
+          id="toggleLeftPanelButton"
+          title="Toggle Filter Panel"
+        >
+          <
+        </button>
+
+        <!-- Map Container -->
+        <div id="map" class="map-container"></div>
+
+        <!-- List View (hidden by default) -->
+        <div id="listViewContainer" class="list-view-container hidden">
+          <table id="stationListTable">
+            <thead>
+              <tr>
+                <th>Station ID</th>
+                <th>Category</th>
+                <th>Name</th>
+                <th>Latitude</th>
+                <th>Longitude</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="stationListBody"></tbody>
+          </table>
+        </div>
+
+
+        <!-- Repairs Priority View -->
+        <div id="repairsViewContainer" class="list-view-container hidden">
+          <table id="repairsListTable">
+            <thead>
+              <tr>
+                <th>Station ID</th>
+                <th>Category</th>
+                <th>Name</th>
+                <th>Latitude</th>
+                <th>Longitude</th>
+                <th>Status</th>
+                <th>Repair Priority</th>
+                <th>Repair Cost</th>
+                <th>Frequency</th>
+              </tr>
+            </thead>
+            <tbody id="repairsListBody"></tbody>
+          </table>
+        </div>
+
+
+
+        <!-- Right Details Panel -->
+        <button
+          class="panel-toggle-button"
+          id="toggleRightPanelButton"
+          title="Toggle Details Panel"
+        >
+          >
+        </button>
+        <div class="right-panel" id="detailsPanel">
+          <h2>Station Details</h2>
+          <div id="detailsContent">
+            <p>Click a station or hover in list.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ───────────────────────────────────────────────────────────────────────── -->
+    <!-- Station Detail Page (hidden by default) -->
+    <!-- ───────────────────────────────────────────────────────────────────────── -->
+    <div id="stationDetailPage" class="station-detail-page-container hidden">
+      <button id="backToMainViewBtn">← Back to Main View</button>
+      <h2 id="stationDetailTitle">Station Details</h2>
+      <div class="station-detail-nav">
+        <button class="detail-nav-btn active" data-section="overview">Overview</button>
+        <button class="detail-nav-btn" data-section="inspectionHistory">Inspection History</button>
+        <button class="detail-nav-btn" data-section="highPriorityRepairs">High Priority Repairs</button>
+        <button class="detail-nav-btn" data-section="documents">Documents</button>
+        <button class="detail-nav-btn" data-section="photos">Photos</button>
+      </div>
+      <div class="station-detail-content">
+        <div id="overviewSection" class="detail-section active"></div>
+        <div id="inspectionHistorySection" class="detail-section"></div>
+        <div id="highPriorityRepairsSection" class="detail-section"></div>
+        <div id="documentsSection" class="detail-section"></div>
+        <div id="photosSection" class="detail-section"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────────────────────────────────────────── -->
+  <!-- “Add Infrastructure” Button & Modal (bottom-left) -->
+  <!-- ─────────────────────────────────────────────────────────────────────────── -->
+  <button id="btnAddInfra">Add Infrastructure</button>
+
+  <div id="addInfraModal">
+    <div class="modal-content">
+      <span class="close-modal">&times;</span>
+      <div class="modal-header">Add Infrastructure</div>
+
+      <!-- Step 1: Choose or Add Location -->
+      <label for="selectLocation">Location (Province / Region)</label>
+      <select id="selectLocation"></select>
+      <label for="inputNewLocation">Or type new location:</label>
+      <input type="text" id="inputNewLocation" placeholder="e.g. BC or AB" />
+      <button id="btnSaveLocation">Save Location</button>
+
+      <!-- Step 2: Choose or Add Asset Type -->
+      <label for="selectAssetType" style="margin-top:20px;">Asset Type (Category)</label>
+      <select id="selectAssetType"></select>
+      <label for="inputNewAssetType">Or type new asset type:</label>
+      <input type="text" id="inputNewAssetType" placeholder="e.g. cableway BC" />
+      <button id="btnSaveAssetType">Save Asset Type</button>
+
+      <!-- Step 3: General Information Form (hidden until both chosen) -->
+      <div id="generalInfoForm" style="display:none; margin-top:20px;">
+        <h4>General Information</h4>
+        <label for="inputStationId">Station ID (unique)</label>
+        <input type="text" id="inputStationId" placeholder="e.g. 05AA008" />
+
+        <label for="inputSiteName">Site Name</label>
+        <input type="text" id="inputSiteName" />
+
+        <!-- REPLACED Province → Status here: -->
+        <label for="inputStatus">Status</label>
+        <input type="text" id="inputStatus" placeholder="e.g. ACTIVE" />
+
+        <label for="selectRepairPriority">Repair Priority</label>
+        <select id="selectRepairPriority">
+          <option value="">-- Select priority --</option>
+          <option value="1">1</option>
+          <option value="2">2</option>
+          <option value="3">3</option>
+          <option value="4">4</option>
+          <option value="5">5</option>
+        </select>
+
+        <label for="inputLatitude">Latitude</label>
+        <input type="text" id="inputLatitude" placeholder="e.g. 54.12345" />
+
+        <label for="inputLongitude">Longitude</label>
+        <input type="text" id="inputLongitude" placeholder="e.g. -121.54321" />
+
+        <button id="btnSaveGeneralInfo">Save General Info</button>
+      </div>
+
+      <!-- Step 4: Add extra sections/dynamic fields (hidden until after general info) -->
+      <div id="extraSectionsContainer" style="display:none; margin-top:20px;">
+        <button id="btnAddSection">+ Add New Section</button>
+        <!-- Dynamically inserted .section-container elements go here -->
+      </div>
+
+      <button id="btnCreateStation" style="display:none; margin-top:20px;">Save Infrastructure</button>
+      <div id="createStationMessage" style="margin-top:10px; color:red;"></div>
+    </div>
+  </div>
+
+  <!-- Leaflet JS -->
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
+  <!-- Our custom renderer script -->
+  <script src="renderer.js"></script>
+</body>
+</html>

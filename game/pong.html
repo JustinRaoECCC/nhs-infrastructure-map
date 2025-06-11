@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>High-Tech Neon Pong</title>
+  <style>
+    html, body { margin: 0; padding: 0; overflow: hidden; background: #000; }
+    canvas { display: block; }
+    #overlay {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.8); color: #0f0;
+      font-family: 'Segoe UI', sans-serif; font-size: 2rem;
+      flex-direction: column;
+    }
+    #overlay button {
+      margin-top: 1rem; padding: 0.5rem 1rem; font-size: 1rem;
+      color: #000; background: #0f0; border: none; cursor: pointer;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div id="overlay">
+    <div>🚀 Neon Pong 3000 🚀</div>
+    <button id="startBtn">Start Game</button>
+  </div>
+  <canvas id="gameCanvas"></canvas>
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    let W, H;
+    function resize() {
+      W = canvas.width = window.innerWidth;
+      H = canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // Game objects
+    const paddleWidth = 20, paddleHeight = 120, paddleSpeed = 6;
+    const ballRadius = 12;
+    let playerY = (H - paddleHeight)/2;
+    let aiY = (H - paddleHeight)/2;
+    let ball = { x: W/2, y: H/2, vx: 7, vy: 4 };
+    let score = { player: 0, ai: 0 };
+    let particles = [];
+
+    // Audio
+    const audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+    function beep(freq, duration) {
+      const o = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      o.connect(g); g.connect(audioCtx.destination);
+      o.frequency.value = freq;
+      o.start();
+      o.stop(audioCtx.currentTime + duration);
+    }
+
+    // Controls
+    const keys = {};
+    window.addEventListener('keydown', e=>keys[e.key] = true);
+    window.addEventListener('keyup', e=>keys[e.key] = false);
+
+    canvas.addEventListener('touchmove', e=>{
+      playerY = e.touches[0].clientY - paddleHeight/2;
+    });
+
+    // Particles
+    function emit(x,y) {
+      particles.push({ x, y, dx: (Math.random()-0.5)*4, dy: (Math.random()-0.5)*4, life: 30 });
+    }
+
+    function update() {
+      // Player paddle
+      if (keys['w'] || keys['W']) playerY -= paddleSpeed;
+      if (keys['s'] || keys['S']) playerY += paddleSpeed;
+      playerY = Math.max(0, Math.min(H - paddleHeight, playerY));
+
+      // AI paddle (simple)
+      const target = ball.y - paddleHeight/2;
+      aiY += (target - aiY) * 0.08;
+      aiY = Math.max(0, Math.min(H - paddleHeight, aiY));
+
+      // Ball
+      ball.x += ball.vx;
+      ball.y += ball.vy;
+
+      // Top/bottom collision
+      if(ball.y < ballRadius || ball.y > H - ballRadius) {
+        ball.vy *= -1;
+        beep(200,0.05);
+      }
+
+      // Paddles
+      // Player
+      if(ball.x - ballRadius < paddleWidth) {
+        if(ball.y > playerY && ball.y < playerY + paddleHeight) {
+          ball.vx *= -1;
+          ball.x = paddleWidth + ballRadius;
+          beep(400,0.05);
+          for(let i=0;i<15;i++) emit(ball.x, ball.y);
+        }
+      }
+      // AI
+      if(ball.x + ballRadius > W - paddleWidth) {
+        if(ball.y > aiY && ball.y < aiY + paddleHeight) {
+          ball.vx *= -1;
+          ball.x = W - paddleWidth - ballRadius;
+          beep(600,0.05);
+          for(let i=0;i<15;i++) emit(ball.x, ball.y);
+        }
+      }
+
+      // Score
+      if(ball.x < -ballRadius) { score.ai++; reset(); }
+      if(ball.x > W + ballRadius) { score.player++; reset(); }
+
+      // Particles update
+      particles = particles.filter(p=>p.life>0);
+      particles.forEach(p=>{ p.x+=p.dx; p.y+=p.dy; p.life--; });
+    }
+
+    function reset() {
+      ball.x = W/2; ball.y = H/2;
+      ball.vx = (Math.random()>0.5?1:-1)*(7 + Math.random()*3);
+      ball.vy = (Math.random()>0.5?1:-1)*(4 + Math.random()*2);
+    }
+
+    function draw() {
+      ctx.clearRect(0,0,W,H);
+      // Net
+      ctx.fillStyle = '#0f0'; ctx.shadowBlur = 0;
+      for(let y=0;y<H;y+=40) ctx.fillRect(W/2-1, y, 2, 20);
+
+      // Paddles
+      ctx.fillStyle = '#0f0'; ctx.shadowBlur = 20; ctx.shadowColor = '#0f0';
+      ctx.fillRect(0, playerY, paddleWidth, paddleHeight);
+      ctx.fillRect(W-paddleWidth, aiY, paddleWidth, paddleHeight);
+
+      // Ball
+      ctx.beginPath(); ctx.arc(ball.x, ball.y, ballRadius, 0, Math.PI*2);
+      ctx.fill(); ctx.shadowBlur = 20; ctx.shadowColor = '#0f0';
+
+      // Particles
+      particles.forEach(p=>{
+        ctx.globalAlpha = p.life/30;
+        ctx.beginPath(); ctx.arc(p.x,p.y,3,0,Math.PI*2);
+        ctx.fill();
+      });
+      ctx.globalAlpha = 1;
+
+      // Score
+      ctx.shadowBlur = 0; ctx.fillStyle = '#0f0'; ctx.font = '48px Segoe UI';
+      ctx.fillText(score.player, W*0.25, 60);
+      ctx.fillText(score.ai, W*0.75, 60);
+    }
+
+    function loop() {
+      update(); draw(); requestAnimationFrame(loop);
+    }
+
+    // UI
+    document.getElementById('startBtn').onclick = ()=>{
+      document.getElementById('overlay').style.display = 'none';
+      reset(); loop();
+    };
+  </script>
+</body>
+</html>

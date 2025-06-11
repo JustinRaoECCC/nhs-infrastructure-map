@@ -1,0 +1,480 @@
+/* style.css */
+/* ───────────────────────────────────────────────────────────────────────── */
+/* Global reset + font */
+/* ───────────────────────────────────────────────────────────────────────── */
+body, html {
+  margin: 0;
+  padding: 0;
+  font-family: sans-serif;
+  height: 100%;
+  overflow: hidden;
+}
+
+.app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+/* ───────────────────────────────────────────────────────────────────────── */
+/* Title Bar */
+/* ───────────────────────────────────────────────────────────────────────── */
+.title-bar {
+  background-color: #f0f0f0;
+  padding: 10px 20px;
+  border-bottom: 1px solid #ccc;
+  text-align: center;
+  flex-shrink: 0;
+}
+.title-bar h1 {
+  margin: 0 0 10px 0;
+}
+.buttons-bar button {
+  margin: 0 5px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+/* ───────────────────────────────────────────────────────────────────────── */
+/* Main View: Filter Panel + Map/List + Details Panel */
+/* ───────────────────────────────────────────────────────────────────────── */
+.main-view-wrapper {
+  display: flex;
+  flex-grow: 1;
+  overflow: hidden;
+}
+
+.main-content {
+  display: flex;
+  flex-grow: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.left-panel, .right-panel {
+  padding: 15px;
+  background-color: #f9f9f9;
+  overflow-y: auto;
+  font-size: 0.9em;
+  transition: width 0.3s ease, padding 0.3s ease, opacity 0.3s ease;
+  flex-shrink: 0;
+}
+.left-panel {
+  width: 280px;
+  border-right: 1px solid #ccc;
+}
+.right-panel {
+  width: 350px;
+  border-left: 1px solid #ccc;
+}
+.left-panel.collapsed, .right-panel.collapsed {
+  width: 0;
+  padding: 0;
+  border: none;
+  opacity: 0;
+  overflow: hidden;
+}
+
+.map-container {
+  flex-grow: 1;
+  height: 100%;
+}
+
+.panel-toggle-button {
+  background-color: #e0e0e0;
+  border: 1px solid #ccc;
+  padding: 10px 5px;
+  cursor: pointer;
+  font-size: 1em;
+  font-weight: bold;
+  z-index: 10;
+  align-self: center;
+  height: 50px;
+  flex-shrink: 0;
+}
+
+.left-panel h2, .right-panel h2 {
+  margin-top: 0;
+  font-size: 1.2em;
+}
+.filter-group {
+  margin-bottom: 15px;
+}
+.filter-group label {
+  display: block;
+  margin-bottom: 4px;
+  cursor: pointer;
+}
+.filter-group input[type="checkbox"] {
+  margin-right: 5px;
+  vertical-align: middle;
+}
+
+#detailsContent p {
+  margin-top: 0;
+  margin-bottom: 6px;
+  word-break: break-word;
+}
+#detailsContent strong {
+  display: inline-block;
+  min-width: 120px;
+  margin-right: 5px;
+}
+#detailsContent hr {
+  border: 0;
+  height: 1px;
+  background-color: #ddd;
+  margin: 10px 0;
+}
+#detailsContent h4 {
+  margin-top: 15px;
+  margin-bottom: 5px;
+  font-size: 1.1em;
+  color: #333;
+}
+
+/* ───────────────────────────────────────────────────────────────────────── */
+/* List View */
+/* ───────────────────────────────────────────────────────────────────────── */
+.list-view-container {
+  flex-grow: 1;
+  height: 100%;
+  overflow-y: auto;
+  padding: 10px;
+  background-color: #fff;
+}
+
+#stationListTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9em;
+}
+
+#stationListTable th, #stationListTable td {
+  border: 1px solid #ddd;
+  padding: 8px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+#stationListTable th {
+  background-color: #f2f2f2;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+#stationListTable tbody tr {
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+#stationListTable tbody tr:hover {
+  background-color: #f0f8ff;
+}
+
+/* Utility class to hide elements */
+.hidden {
+  display: none !important;
+}
+
+/* ───────────────────────────────────────────────────────────────────────── */
+/* Station Detail Page */
+/* ───────────────────────────────────────────────────────────────────────── */
+.station-detail-page-container {
+  padding: 20px;
+  height: calc(100vh - 70px);
+  overflow-y: auto;
+  background-color: #fff;
+  box-sizing: border-box;
+}
+
+#backToMainViewBtn {
+  margin-bottom: 15px;
+  padding: 8px 15px;
+  cursor: pointer;
+  background-color: #f0f0f0;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+#stationDetailTitle {
+  margin-top: 0;
+  margin-bottom: 20px;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 10px;
+}
+
+.station-detail-nav {
+  margin-bottom: 20px;
+  border-bottom: 1px solid #ccc;
+  padding-bottom: 10px;
+}
+.station-detail-nav .detail-nav-btn {
+  padding: 10px 15px;
+  margin-right: 5px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  border-bottom: none;
+  background-color: #f9f9f9;
+  border-top-left-radius: 4px;
+  border-top-right-radius: 4px;
+}
+.station-detail-nav .detail-nav-btn.active {
+  background-color: #fff;
+  border-color: #ccc;
+  border-bottom-color: #fff;
+  font-weight: bold;
+}
+
+.station-detail-content .detail-section {
+  display: none;
+  padding: 15px;
+  border: 1px solid #eee;
+  border-radius: 4px;
+  min-height: 200px;
+}
+.station-detail-content .detail-section.active {
+  display: block;
+}
+
+.file-list {
+  list-style: none;
+  padding: 0;
+}
+.file-list li {
+  padding: 8px 0;
+  border-bottom: 1px dashed #eee;
+  cursor: pointer;
+}
+.file-list li:hover {
+  background-color: #f9f9f9;
+}
+.file-list li:last-child {
+  border-bottom: none;
+}
+.file-list img {
+  max-width: 150px;
+  max-height: 150px;
+  margin: 5px;
+  border: 1px solid #ccc;
+  cursor: pointer;
+  object-fit: cover;
+}
+
+/* ───────────────────────────────────────────────────────────────────────── */
+/* Print Styles */
+/* ───────────────────────────────────────────────────────────────────────── */
+@media print {
+  .title-bar .buttons-bar,
+  .panel-toggle-button,
+  #saveChangesBtn,
+  #saveMessage,
+  #btnSwitchToList,
+  #btnRepairsPriority,
+  #btnCrossingStatus,
+  #btnDownload,
+  #backToMainViewBtn,
+  .station-detail-nav {
+    display: none !important;
+  }
+
+  .left-panel, .right-panel {
+    width: 200px !important;
+    opacity: 1 !important;
+    padding: 10px !important;
+    border: 1px solid #ccc !important;
+    overflow: visible !important;
+    height: auto !important;
+  }
+  .left-panel.collapsed, .right-panel.collapsed {
+    display: none !important;
+  }
+
+  .map-container, .list-view-container, .station-detail-page-container {
+    flex-grow: 1 !important;
+    width: auto !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+  .list-view-container.hidden,
+  .map-container.hidden,
+  .station-detail-page-container.hidden {
+    display: none !important;
+  }
+  .main-view-wrapper.hidden {
+    display: none !important;
+  }
+  .main-view-wrapper, .station-detail-page-container {
+    display: block !important;
+  }
+  .main-view-wrapper.hidden, .station-detail-page-container.hidden {
+    display: none !important;
+  }
+  body, .app-container {
+    height: auto !important;
+    overflow: visible !important;
+  }
+}
+
+/* ───────────────────────────────────────────────────────────────────────── */
+/* Group row styles for list view */
+/* ───────────────────────────────────────────────────────────────────────── */
+.province-group-row th {
+  background: #dde4ea;
+  font-weight: bold;
+  position: sticky;
+  top: 0;
+  z-index: 4;
+}
+.category-group-row th {
+  background: #f2efe7;
+  font-weight: bold;
+  position: sticky;
+  top: 0;
+  z-index: 4;
+}
+
+/* ───────────────────────────────────────────────────────────────────────── */
+/* Station-row hover styling */
+/* ───────────────────────────────────────────────────────────────────────── */
+.station-data-row {
+  cursor: pointer;
+}
+.station-data-row:hover {
+  background: #eef4ff;
+}
+
+/* ───────────────────────────────────────────────────────────────────────── */
+/* “Add Infrastructure” Modal + Button */
+/* ───────────────────────────────────────────────────────────────────────── */
+#btnAddInfra {
+  position: absolute;
+  bottom: 20px;
+  left: 20px;
+  z-index: 500;
+  padding: 8px 12px;
+  background: #28a745;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+/* Modal overlay */
+#addInfraModal {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.5);
+  display: none;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+}
+
+/* Modal content */
+#addInfraModal .modal-content {
+  background: white;
+  border-radius: 6px;
+  padding: 20px;
+  width: 400px;
+  max-height: 90%;
+  overflow-y: auto;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+}
+
+#addInfraModal .modal-header {
+  font-size: 1.2em;
+  margin-bottom: 10px;
+}
+
+#addInfraModal label {
+  display: block;
+  margin-top: 10px;
+}
+
+#addInfraModal input[type="text"],
+#addInfraModal select {
+  width: 100%;
+  padding: 6px 8px;
+  margin-top: 4px;
+  box-sizing: border-box;
+}
+
+#addInfraModal button {
+  margin-top: 15px;
+  padding: 8px 12px;
+}
+
+#addInfraModal .close-modal {
+  float: right;
+  cursor: pointer;
+  font-size: 1.1em;
+}
+
+#addInfraModal .section-container {
+  border: 1px solid #ccc;
+  padding: 10px;
+  margin-top: 15px;
+}
+
+#addInfraModal .section-container .section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+#addInfraModal .section-container .field-row {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+
+#addInfraModal .section-container .field-row input {
+  flex: 1;
+  margin-right: 8px;
+}
+
+#addInfraModal .section-container .remove-field-btn,
+#addInfraModal .section-container .remove-section-btn {
+  background: transparent;
+  border: none;
+  color: red;
+  cursor: pointer;
+  font-size: 1em;
+}
+
+/* ─── Repairs table styling ──────────────────────────────────────────────── */
+#repairsListTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9em;
+}
+#repairsListTable th,
+#repairsListTable td {
+  border: 1px solid #ddd;
+  padding: 8px;
+  text-align: left;
+  white-space: nowrap;
+}
+#repairsListTable th {
+  background-color: #f2f2f2;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+#repairsListTable tbody tr {
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+#repairsListTable tbody tr:hover {
+  background-color: #f0f8ff;
+}
+
+/* Repairs‐view grouping by priority */
+.repair-priority-group-row th {
+  background: #f2efe7;
+  font-weight: bold;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
