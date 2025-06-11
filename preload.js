@@ -24,6 +24,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   createNewStation:     (stationObj) => ipcRenderer.invoke('create-new-station', stationObj),
 
   // Secret Pong Game
-  openPong: () => ipcRenderer.send('open-pong')
+  openPong: () => ipcRenderer.send('open-pong'),
+
+  // Nuke
+  deleteAllDataFiles: () => ipcRenderer.invoke('delete-all-data-files'),
+
+  // Bulk import helpers
+  chooseExcelFile:        ()              => ipcRenderer.invoke('choose-excel-file'),
+  getExcelSheetNames:     (filePath)      => ipcRenderer.invoke('get-excel-sheet-names', filePath),
+  importStationsFromExcel:(filePath, sheet) => ipcRenderer.invoke('import-stations-from-excel', filePath, sheet)
+
 
 });

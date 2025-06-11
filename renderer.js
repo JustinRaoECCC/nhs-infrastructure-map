@@ -52,6 +52,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const btnPriorityMap          = document.getElementById('btnPriorityMap');
 
+
+  // Bulk-import controls
+  const btnChooseExcel      = document.getElementById('btnChooseExcel');
+  const chosenExcelName     = document.getElementById('chosenExcelName');
+  const sheetSelectContainer= document.getElementById('sheetSelectContainer');
+  const selectSheet         = document.getElementById('selectSheet');
+  const btnImportSheet      = document.getElementById('btnImportSheet');
+  const importSummary       = document.getElementById('importSummary');
+
+  let importFilePath = null;
+
+
   let currentSortOption        = 'category';
   let allStationData           = [];
   let currentMarkers           = L.layerGroup().addTo(map);
@@ -535,6 +547,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const filtered = getFilteredStationData();
     // Make a copy so we can sort without mutating the original
     const arr = filtered.slice();
+    
 
     // 2) Sort based on the current repairs‐view sort option
     switch (currentRepairsSortOption) {
@@ -2012,6 +2025,14 @@ document.addEventListener('DOMContentLoaded', () => {
     existingSecEls.forEach(el => el.remove());
     btnCreateStation.style.display = 'none';
     createStationMessage.textContent = '';
+
+    // bulk-import reset
+    importFilePath           = null;
+    chosenExcelName.textContent = '';
+    sheetSelectContainer.style.display = 'none';
+    selectSheet.innerHTML    = '';
+    btnImportSheet.disabled  = true;
+    importSummary.textContent= '';
   }
 
   // Initial load of lookups & station IDs
@@ -2019,6 +2040,86 @@ document.addEventListener('DOMContentLoaded', () => {
     await loadLookups();
     await loadExistingStationIDs();
   })();
+
+
+
+  // ─── Triple-click “nuke” button ─────────────────────────────────
+  let destroyClicks = 0, destroyTimer = null;
+  const btnNuke = document.getElementById('btnDestroyData');
+  btnNuke.addEventListener('click', () => {
+    destroyClicks++;
+    if (destroyClicks === 1) {
+      // start/reset 3s window
+      destroyTimer = setTimeout(() => destroyClicks = 0, 500);
+    }
+    if (destroyClicks >= 3) {
+      clearTimeout(destroyTimer);
+      destroyClicks = 0;
+      if (confirm('⚠️ Really delete ALL .xlsx files in data/?')) {
+        window.electronAPI.deleteAllDataFiles()
+          .then(res => {
+            if (res.success) {
+              alert('✅ All .xlsx files deleted.');
+              loadDataAndInitialize();
+            }
+            else alert('❌ Error: ' + res.message);
+          });
+      }
+    }
+  });
+
+
+  // 1️⃣  Pick an Excel file
+btnChooseExcel.addEventListener('click', async () => {
+  const res = await window.electronAPI.chooseExcelFile();
+  if (!res.canceled && res.filePath) {
+    importFilePath                 = res.filePath;
+    chosenExcelName.textContent = res.filePath.split(/[\\/]/).pop();
+    importSummary.textContent      = '';
+
+    // ask main for sheet names
+    const sheetsRes = await window.electronAPI.getExcelSheetNames(importFilePath);
+    if (sheetsRes.success) {
+      // populate dropdown
+      selectSheet.innerHTML = '';
+      sheetsRes.sheets.forEach(name => {
+        const opt = document.createElement('option');
+        opt.value = opt.textContent = name;
+        selectSheet.appendChild(opt);
+      });
+      sheetSelectContainer.style.display = 'block';
+      btnImportSheet.disabled = false;
+    } else {
+      alert('Could not read workbook: ' + sheetsRes.message);
+    }
+  }
+});
+
+// 2️⃣  Import selected sheet
+btnImportSheet.addEventListener('click', async () => {
+  if (!importFilePath) return;
+  btnImportSheet.disabled = true;
+  importSummary.textContent = 'Importing…';
+
+  const sheetName = selectSheet.value;
+  const res = await window.electronAPI.importStationsFromExcel(importFilePath, sheetName);
+
+  if (res.success) {
+    importSummary.style.color = '#007700';
+    importSummary.textContent =
+      `✅ Imported ${res.imported} station(s). ` +
+      (res.duplicates.length ? `${res.duplicates.length} duplicate ID(s) skipped.` : '');
+    await loadDataAndInitialize();     // refresh map/list
+  } else {
+    importSummary.style.color = '#cc0000';
+    importSummary.textContent = '❌ ' + res.message;
+  }
+  btnImportSheet.disabled = false;
+});
+
+
+
+
 
 }); // end DOMContentLoaded
 

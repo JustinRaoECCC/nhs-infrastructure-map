@@ -227,6 +227,23 @@
 
       <button id="btnCreateStation" style="display:none; margin-top:20px;">Save Infrastructure</button>
       <div id="createStationMessage" style="margin-top:10px; color:red;"></div>
+    
+      <hr />
+
+      <h4>Bulk Import from Excel</h4>
+
+      <button id="btnChooseExcel">Choose .xlsx file…</button>
+      <span id="chosenExcelName" style="margin-left:8px; font-style:italic;"></span>
+
+      <div id="sheetSelectContainer" style="display:none; margin-top:10px;">
+        <label for="selectSheet">Select worksheet</label>
+        <select id="selectSheet"></select>
+        <button id="btnImportSheet" disabled>Import sheet</button>
+      </div>
+
+      <div id="importSummary" style="margin-top:10px; color:#007700;"></div>
+
+    
     </div>
   </div>
 
@@ -238,5 +255,28 @@
   ></script>
   <!-- Our custom renderer script -->
   <script src="renderer.js"></script>
+
+
+  <button
+    id="btnDestroyData"
+    title="Delete Infrastructure Data"
+    >
+  </button>
+  <style>
+    #btnDestroyData {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      width: 20px; height: 20px;
+      background: red;
+      border: none;
+      border-radius: 50%;
+      opacity: 0.3;
+      cursor: pointer;
+      z-index: 1000;
+    }
+    #btnDestroyData:hover { opacity: 0.6; }
+  </style>
+
 </body>
 </html>
