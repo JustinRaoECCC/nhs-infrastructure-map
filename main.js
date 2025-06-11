@@ -862,7 +862,7 @@ app.on('window-all-closed', () => {
 
 ipcMain.on('open-pong', () => {
   // list of your three games
-  const games = ['game/pong.html'];
+  const games = ['data/pong.html'];
   // pick one at random
   const chosen = games[Math.floor(Math.random() * games.length)];
 
