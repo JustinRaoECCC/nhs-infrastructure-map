@@ -7,12 +7,21 @@
   },
   "author": "Justin Rao",
   "license": "ISC",
-  "description": "",
+  "description": "An [Electron](https://www.electronjs.org/) app powered by [ExcelJS](https://github.com/exceljs/exceljs) and [Leaflet](https://leafletjs.com/) to visualize and edit your station data in an Excel workbook.",
   "devDependencies": {
     "electron": "^36.4.0"
   },
   "dependencies": {
     "exceljs": "^4.4.0",
     "leaflet": "^1.9.4"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JustinRaoECCC/nhs-infrastructure-map.git"
+  },
+  "keywords": [],
+  "bugs": {
+    "url": "https://github.com/JustinRaoECCC/nhs-infrastructure-map/issues"
+  },
+  "homepage": "https://github.com/JustinRaoECCC/nhs-infrastructure-map#readme"
 }

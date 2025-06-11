@@ -7,6 +7,8 @@ An [Electron](https://www.electronjs.org/) app powered by [ExcelJS](https://gith
 ## 📋 Prerequisites
 
 - **Node.js** ≥ v14.x (includes `npm`)
+    "npm init -y"
+
 - **Git**
 
 ---
