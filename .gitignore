@@ -6,8 +6,6 @@ dist/
 out/
 build/
 
-# Excel data file (we’ll generate this on first run)
-/data/*.xlsx
 
 # Logs
 npm-debug.log*
