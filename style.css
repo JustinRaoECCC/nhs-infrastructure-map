@@ -468,7 +468,7 @@ body, html {
 }
 #repairsListTable tbody tr:hover {
   background-color: #f0f8ff;
-}
+} 
 
 /* Repairs‐view grouping by priority */
 .repair-priority-group-row th {
