@@ -21,3 +21,15 @@ cd nhs-infrastructure-map
 
 # Run the setup script:
 ./setup.sh
+```
+
+---
+
+## 🪲 Current Bugs
+
+- Make sure you can filter between provinces for each datatype
+- Also make different provinces different colours
+
+
+- red button reopens the program
+

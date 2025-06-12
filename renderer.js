@@ -1681,6 +1681,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const inputNewLocation       = document.getElementById('inputNewLocation');
   const btnSaveLocation        = document.getElementById('btnSaveLocation');
   const selectAssetType        = document.getElementById('selectAssetType');
+  const assetTypeContainer = document.getElementById('assetTypeContainer');
   const inputNewAssetType      = document.getElementById('inputNewAssetType');
   const btnSaveAssetType       = document.getElementById('btnSaveAssetType');
   const generalInfoForm        = document.getElementById('generalInfoForm');
@@ -1762,6 +1763,14 @@ document.addEventListener('DOMContentLoaded', () => {
       existingStationIDs = new Set();
     }
   }
+
+
+  selectLocation.addEventListener('change', () => {
+    assetTypeContainer.style.display = selectLocation.value ? 'block' : 'none';
+    // And re-run your existing logic to reveal general-info once both are chosen
+    maybeShowGeneralForm();
+  });
+
 
   // Save General Info → basic validation and reveal extra sections
   btnSaveGeneralInfo.addEventListener('click', () => {
@@ -2097,7 +2106,16 @@ btnChooseExcel.addEventListener('click', async () => {
 
 // 2️⃣  Import selected sheet
 btnImportSheet.addEventListener('click', async () => {
-  if (!importFilePath) return;
+  
+  console.log('🔥 Import button clicked', {
+    importFilePath,
+    sheetName: selectSheet.value
+  });
+  if (!importFilePath) {
+    console.warn('No file chosen yet – importFilePath is null');
+    return;
+  }
+  
   btnImportSheet.disabled = true;
   importSummary.textContent = 'Importing…';
 

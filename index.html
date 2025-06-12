@@ -180,12 +180,16 @@
       <input type="text" id="inputNewLocation" placeholder="e.g. BC or AB" />
       <button id="btnSaveLocation">Save Location</button>
 
-      <!-- Step 2: Choose or Add Asset Type -->
-      <label for="selectAssetType" style="margin-top:20px;">Asset Type (Category)</label>
-      <select id="selectAssetType"></select>
-      <label for="inputNewAssetType">Or type new asset type:</label>
-      <input type="text" id="inputNewAssetType" placeholder="e.g. cableway BC" />
-      <button id="btnSaveAssetType">Save Asset Type</button>
+      <!-- Step 2: Asset Type (hidden until a Location is selected) -->
+      <div id="assetTypeContainer" style="display:none; margin-top:20px;">
+        <label for="selectAssetType">Asset Type (Category)</label>
+        <select id="selectAssetType"></select>
+
+        <label for="inputNewAssetType">Or type new asset type:</label>
+        <input type="text" id="inputNewAssetType" placeholder="e.g. cableway BC" />
+        <button id="btnSaveAssetType">Save Asset Type</button>
+      </div>
+
 
       <!-- Step 3: General Information Form (hidden until both chosen) -->
       <div id="generalInfoForm" style="display:none; margin-top:20px;">

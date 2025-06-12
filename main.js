@@ -35,6 +35,55 @@ if (!fs.existsSync(DATA_DIR)) {
 }
 
 
+// CommonJS style—no import/ESM syntax here:
+const { point, booleanPointInPolygon } = require('@turf/turf');
+
+// Your province loader & inferrer exactly as before:
+const PROVINCES = [
+  { code: 'BC', name: 'British Columbia' },
+  { code: 'AB', name: 'Alberta' },
+  { code: 'YT', name: 'Yukon' },
+  { code: 'NT', name: 'Northwest Territories' },
+  { code: 'NU', name: 'Nunavut' }
+];
+const provinceGeo = {};
+
+async function loadProvinceBoundaries() {
+  await Promise.all(
+    PROVINCES.map(async ({ code, name }) => {
+      const url = new URL('https://nominatim.openstreetmap.org/search.php');
+      url.search = new URLSearchParams({
+        q: `${name}, Canada`,
+        polygon_geojson: '1',
+        format: 'jsonv2'
+      });
+      const res = await fetch(url, {
+        headers: { 'User-Agent': 'YourApp/1.0' }
+      });
+      const results = await res.json();
+      if (results.length) provinceGeo[code] = results[0].geojson;
+      else console.warn(`No boundary for ${name}`);
+    })
+  );
+}
+
+function inferProvinceByCoordinates(lat, lon) {
+  const pt = point([lon, lat]);
+  for (const { code } of PROVINCES) {
+    if (provinceGeo[code] &&
+        booleanPointInPolygon(pt, provinceGeo[code])) {
+      return code;
+    }
+  }
+  return '';
+}
+
+app.whenReady().then(async () => {
+  await loadProvinceBoundaries();
+  // create your BrowserWindow, etc.
+  console.log(inferProvinceByCoordinates(53.5, -128.6)); // → "BC"
+});
+
 
 
 // ─── Lookup Workbook Helpers ─────────────────────────────────────────────────
@@ -46,10 +95,23 @@ if (!fs.existsSync(DATA_DIR)) {
 async function loadLookupWorkbook() {
   const wb = new ExcelJS.Workbook();
   const exists = fs.existsSync(LOOKUPS_PATH);
+
   if (!exists) {
+    // First time: create a brand-new file
     await wb.xlsx.writeFile(LOOKUPS_PATH);
   }
-  await wb.xlsx.readFile(LOOKUPS_PATH);
+
+  try {
+    // Try reading it
+    await wb.xlsx.readFile(LOOKUPS_PATH);
+  } catch (err) {
+    console.warn('⚠️ lookups.xlsx is corrupted; recreating fresh copy.', err);
+    // Overwrite with a clean workbook
+    await wb.xlsx.writeFile(LOOKUPS_PATH);
+    // Read it again (now it’s an empty workbook)
+    await wb.xlsx.readFile(LOOKUPS_PATH);
+  }
+
   return wb;
 }
 
@@ -432,8 +494,25 @@ ipcMain.handle('save-station-data', async (event, updatedStation) => {
     const dataPath   = path.join(DATA_DIR, `${at}.xlsx`);
     const workbook   = new ExcelJS.Workbook();
     await workbook.xlsx.readFile(dataPath);
-    const province   = updatedStation['General Information – Province'] || updatedStation.province;
-    const worksheet  = workbook.getWorksheet(province);
+
+    // Try all possible province keys in order:
+    //  1) if you added “General Information – Province” as a header
+    //  2) the simpler “Province” header
+    //  3) your own fallback field
+    const province =
+      updatedStation['General Information – Province'] ||
+      updatedStation.Province ||
+      updatedStation.province;
+
+    if (!province) {
+      return { success: false, message: 'No province specified for station.' };
+    }
+
+    const worksheet = workbook.getWorksheet(province);
+    if (!worksheet) {
+      return { success: false, message: `Worksheet "${province}" not found in ${at}.xlsx` };
+    }
+
     if (!worksheet) {
       return { success: false, message: `Sheet "${province}" not found in ${at}.xlsx` };
     }
@@ -698,114 +777,147 @@ ipcMain.handle('get-excel-sheet-names', async (e, filePath) => {
 // ─────────────────────────────────────────────────────────────
 // Bulk-import an entire worksheet
 // ─────────────────────────────────────────────────────────────
-ipcMain.handle(
-  'import-stations-from-excel',
-  async (e, filePath, sheetName) => {
-    const summary = { imported: 0, duplicates: [], errors: [] };
 
-    try {
-      // 1) open workbook + sheet
-      const wb = new ExcelJS.Workbook();
-      await wb.xlsx.readFile(filePath);
-      const ws = wb.getWorksheet(sheetName);
-      if (!ws) {
-        return { success: false, message: `Worksheet "${sheetName}" not found.` };
-      }
+// Replace your existing handler with this:
+ipcMain.handle('import-stations-from-excel', async (e, filePath, sheetName) => {
+  const summary = { imported: 0, duplicates: [], errors: [] };
+  try {
+    // 1) Load source workbook + sheet
+    const sourceWb  = new ExcelJS.Workbook();
+    await sourceWb.xlsx.readFile(filePath);
+    const wsSource = sourceWb.getWorksheet(sheetName);
+    if (!wsSource) {
+      return { success: false, message: `Worksheet "${sheetName}" not found.` };
+    }
 
-      // 2) locate header row (first row that has both Station ID & Latitude)
-      let headerRowIdx = -1;
-      for (let r = 1; r <= Math.min(10, ws.rowCount); r++) {
-        const txt = ws.getRow(r).values.map(v => (v ? String(v).toLowerCase() : ''));
-        if (txt.includes('station id') && txt.includes('latitude')) {
-          headerRowIdx = r;
-          break;
-        }
+    // 2) Detect header row (Station ID & Latitude)
+    let headerRowIdx = -1;
+    for (let r = 1; r <= Math.min(10, wsSource.rowCount); r++) {
+      const vals = wsSource.getRow(r).values.map(v => (v ? String(v).toLowerCase() : ''));
+      if (vals.includes('station id') && vals.includes('latitude')) {
+        headerRowIdx = r;
+        break;
       }
-      if (headerRowIdx === -1) {
-        return { success: false, message: 'No Station ID / Latitude headings found.' };
-      }
+    }
+    if (headerRowIdx === -1) {
+      return { success: false, message: 'No "Station ID"/"Latitude" headers found.' };
+    }
 
-      // 3) build header → column map
-      const hdrMap = {};
-      ws.getRow(headerRowIdx).eachCell((c, col) => {
-        if (c.value) hdrMap[String(c.value).trim()] = col;
+    // 3) Build header→column map
+    const hdrMap = {};
+    wsSource.getRow(headerRowIdx).eachCell((cell, col) => {
+      const key = String(cell.value || '').trim();
+      if (key) hdrMap[key] = col;
+    });
+
+    // 4) Infer assetType & sheet‐level province from sheet name
+    let assetType     = sheetName;
+    let sheetProvince = '';
+    const m = sheetName.match(/(.+?)\s+([A-Za-z]{2})$/);
+    if (m) {
+      assetType     = m[1].trim();
+      sheetProvince = m[2].toUpperCase();
+    }
+
+    // 5) Ensure data workbook exists
+    const dataPath = path.join(DATA_DIR, `${assetType}.xlsx`);
+    await addNewAssetTypeInternal(assetType);
+    if (!fsSync.existsSync(dataPath)) {
+      const wbNew      = new ExcelJS.Workbook();
+      const lookupWb   = await loadLookupWorkbook();
+      const provSheet  = lookupWb.getWorksheet('Locations');
+      const provinces  = [];
+      provSheet.eachRow((row, rn) => {
+        const v = row.getCell(1).text;
+        if (rn >= 2 && v?.trim()) provinces.push(v.trim());
       });
+      const coreCols = [
+        'Station ID','Asset Type','Site Name',
+        'Province','Latitude','Longitude',
+        'Status','Repair Priority'
+      ];
+      for (const p of provinces) {
+        const ws = wbNew.addWorksheet(p);
+        ws.mergeCells('A1:H1');
+        ws.getCell('A1').value     = 'General Information';
+        ws.getCell('A1').alignment = { horizontal:'center', vertical:'middle' };
+        ws.getCell('A1').font      = { bold:true };
+        coreCols.forEach((hdr, i) => {
+          const c = ws.getRow(2).getCell(i + 1);
+          c.value     = hdr;
+          c.font      = { bold:true };
+          c.alignment = { horizontal:'left', vertical:'middle' };
+        });
+      }
+      await wbNew.xlsx.writeFile(dataPath);
+    }
 
-      // safe getter (never returns col −1)
-      const get = (row, key) => {
-        const col = hdrMap[key];
-        return col ? row.getCell(col).text?.trim() ?? '' : '';
+    // 6) Cell‐fetch helper
+    const get = (row, key) => {
+      const col = hdrMap[key];
+      return col ? row.getCell(col).text?.trim() ?? '' : '';
+    };
+
+    // 7) Iterate rows
+    for (let r = headerRowIdx + 1; r <= wsSource.rowCount; r++) {
+      const row = wsSource.getRow(r);
+      if (!row.hasValues) continue;
+
+      const stationId = get(row, 'Station ID');
+      const lat       = parseFloat(get(row, 'Latitude'));
+      const lon       = parseFloat(get(row, 'Longitude'));
+      if (!stationId || isNaN(lat) || isNaN(lon)) continue;
+
+      // *** Infer per-row province if sheet name had none ***
+      let rowProvince = sheetProvince;
+      if (!rowProvince) {
+        rowProvince = inferProvinceByCoordinates(lat, lon);
+      }
+
+      const stationObj = {
+        location: rowProvince,
+        assetType,
+        generalInfo: {
+          stationId,
+          siteName:       get(row, 'Station Name') || get(row, 'Site Name'),
+          province:       rowProvince,
+          latitude:       lat,
+          longitude:      lon,
+          status:         get(row, 'Status')          || 'UNKNOWN',
+          repairPriority: get(row, 'Repair Priority') || ''
+        },
+        extraSections: {}
       };
 
-      // 4) asset-type & province from sheet name (e.g. "cableway AB")
-      let sheetAssetType = sheetName;
-      let sheetProv      = '';
-      const m = sheetName.match(/(.+?)\s+([A-Za-z]{2})$/);
-      if (m) {
-        sheetAssetType = m[1].trim();
-        sheetProv      = m[2].toUpperCase();
-      }
+      // Copy any “Section – Field” columns
+      Object.keys(hdrMap).forEach(hdr => {
+        if (hdr.includes(' - ')) {
+          const [sec, fld] = hdr.split(' - ').map(s => s.trim());
+          stationObj.extraSections[sec] ||= {};
+          stationObj.extraSections[sec][fld] = get(row, hdr);
+        }
+      });
 
-      // 5) iterate rows
-      for (let r = headerRowIdx + 1; r <= ws.rowCount; r++) {
-        const row = ws.getRow(r);
-        if (!row.hasValues) continue;
-
-        const stationId = get(row, 'Station ID');
-        const lat       = parseFloat(get(row, 'Latitude'));
-        const lon       = parseFloat(get(row, 'Longitude'));
-        if (!stationId || isNaN(lat) || isNaN(lon)) continue;
-
-        const province  = get(row, 'General Information - Province') || sheetProv;
-        const assetType = sheetAssetType;
-
-        // ensure workbook exists (re-use internal helper)
-        await addNewAssetTypeInternal(assetType);
-
-        // build station object
-        const stationObj = {
-          location: province,
-          assetType,
-          generalInfo: {
-            stationId,
-            siteName:       get(row, 'Station Name') || get(row, 'Site Name'),
-            province,
-            latitude:       lat,
-            longitude:      lon,
-            status:         get(row, 'Status')          || 'UNKNOWN',
-            repairPriority: get(row, 'Repair Priority') || ''
-          },
-          extraSections: {}
-        };
-
-        // copy any “Section – Field” columns
-        Object.keys(hdrMap).forEach(h => {
-          if (h.includes(' - ')) {
-            const [sec, field] = h.split(' - ');
-            if (!stationObj.extraSections[sec]) stationObj.extraSections[sec] = {};
-            stationObj.extraSections[sec][field] = row.getCell(hdrMap[h]).text;
-          }
-        });
-
-        // write via internal helper (no handleMap)
-        const res = await createNewStationInternal(stationObj);
-
-        if (res?.success) summary.imported++;
-        else if (res?.message?.includes('already exists'))
-          summary.duplicates.push(stationId);
-        else
-          summary.errors.push({ row: r, message: res?.message });
-      }
-
-      if (!summary.imported && summary.errors.length === 0) {
-        return { success: false, message: 'No rows imported.' };
-      }
-      return { success: true, ...summary };
-    } catch (err) {
-      return { success: false, message: err.message };
+      const res = await createNewStationInternal(stationObj);
+      if (res.success) summary.imported++;
+      else if (res.message?.includes('already exists')) summary.duplicates.push(stationId);
+      else summary.errors.push({ row: r, message: res.message });
     }
+
+    // 8) Single confirmation
+    if (summary.imported > 0) {
+      console.log(`✅ Imported ${summary.imported} station(s) into ${assetType}.xlsx`);
+    }
+
+    return { success: summary.imported > 0, ...summary };
+  } catch (err) {
+    return { success: false, message: err.message };
   }
-);
+});
+
+
+
+
 
 
 
