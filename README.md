@@ -31,5 +31,3 @@ cd nhs-infrastructure-map
 - Also make different provinces different colours
 
 
-- red button reopens the program
-

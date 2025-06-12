@@ -738,7 +738,8 @@ ipcMain.handle('delete-all-data-files', async () => {
         fsSync.unlinkSync(path.join(DATA_DIR, f));
       }
     }
-    return { success: true };
+    app.relaunch();
+    app.exit(0)
   } catch (err) {
     console.error('delete-all-data-files error:', err);
     return { success: false, message: err.message };
