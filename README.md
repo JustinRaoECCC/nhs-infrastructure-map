@@ -21,13 +21,15 @@ cd nhs-infrastructure-map
 
 # Run the setup script:
 ./setup.sh
+
+# After the script, enter "npm start" to run the program
 ```
 
 ---
 
-## 🪲 Current Bugs
+## 🪲 Current Bugs/TODO list
 
-- Make sure you can filter between provinces for each datatype
-- Also make different provinces different colours
+- Turn into an actual desktop application where the site xlsx documents are saved to a network/sharepoint
+- Will more than one person be able to have the app open at once?
 
 
