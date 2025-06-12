@@ -303,124 +303,110 @@ document.addEventListener('DOMContentLoaded', () => {
     filterPanelElement.innerHTML = '<h2>Filters</h2>';
     if (!Array.isArray(data) || data.length === 0) return;
 
-    // Collect categories → subcategories map
-    const categories = {};
-    data.forEach(station => {
-      if (!station || !station.category) return;
-      const mainKey = station.category.includes(" ")
-        ? station.category.split(" ")[0].toLowerCase()
-        : station.category.toLowerCase();
-      const subKey = station.category;
-      if (!categories[mainKey]) {
-        categories[mainKey] = {
-          name: station.category.includes(" ")
-            ? station.category.split(" ")[0]
-            : station.category,
-          subCategories: []
-        };
-      }
-      if (!categories[mainKey].subCategories.find(item => item.id === subKey)) {
-        categories[mainKey].subCategories.push({ id: subKey, name: subKey });
-      }
+    // 1) build a map: category → Set of provinces
+    const map = {};
+    data.forEach(st => {
+      if (!st.category) return;
+      const cat  = st.category;
+      const prov = provinceOf(st) || 'Unknown';
+      if (!map[cat]) map[cat] = new Set();
+      map[cat].add(prov);
     });
 
-    // Sort main categories alphabetically
-    const sortedMainKeys = Object.keys(categories).sort((a, b) =>
-      categories[a].name.localeCompare(categories[b].name)
-    );
-
-    sortedMainKeys.forEach(mainKey => {
-      const mainData = categories[mainKey];
+    // 2) render each category group
+    Object.keys(map).sort().forEach(cat => {
       const groupDiv = document.createElement('div');
       groupDiv.className = 'filter-group';
 
-      // “(All)” checkbox for main category
-      const mainLabel = document.createElement('label');
-      mainLabel.style.fontWeight = 'bold';
-      const mainCheckbox = document.createElement('input');
-      mainCheckbox.type = 'checkbox';
-      mainCheckbox.id = `toggle-all-${mainKey.replace(/\s+/g, '-')}`;
-      mainCheckbox.checked = true;
-      mainCheckbox.onchange = () => {
-        mainData.subCategories.forEach(sc => {
-          const chk = document.getElementById(`filter-${sc.id.replace(/\s+/g, '-')}`);
-          if (chk) chk.checked = mainCheckbox.checked;
-        });
+      // main "(All)" checkbox
+      const mainLbl = document.createElement('label');
+      mainLbl.style.fontWeight = 'bold';
+      const mainChk = document.createElement('input');
+      mainChk.type = 'checkbox';
+      mainChk.checked = true;
+      mainChk.id = `toggle-all-${cat.replace(/\s+/g,'-')}`;
+      mainChk.onchange = () => {
+        groupDiv
+          .querySelectorAll('input[type="checkbox"]:not(#'+mainChk.id+')')
+          .forEach(cb => cb.checked = mainChk.checked);
         updateActiveViewDisplay();
       };
-      mainLabel.appendChild(mainCheckbox);
-      mainLabel.appendChild(
-        document.createTextNode(` ${mainData.name.charAt(0).toUpperCase()}${mainData.name.slice(1)} (All)`)
-      );
-      groupDiv.appendChild(mainLabel);
+      mainLbl.appendChild(mainChk);
+      mainLbl.appendChild(document.createTextNode(` ${cat} (All)`));
+      groupDiv.appendChild(mainLbl);
 
-      // Container for subcategory checkboxes
-      const subContainer = document.createElement('div');
-      subContainer.style.paddingLeft = '20px';
-
-      // Sort subcategories alphabetically
-      const sortedSubCats = mainData.subCategories.sort((a, b) =>
-        a.name.localeCompare(b.name)
-      );
-      sortedSubCats.forEach(scObj => {
+      // sub-checkboxes by province
+      const subCont = document.createElement('div');
+      subCont.style.paddingLeft = '20px';
+      Array.from(map[cat]).sort().forEach(prov => {
         const lbl = document.createElement('label');
         const chk = document.createElement('input');
-        chk.type = 'checkbox';
-        chk.value = scObj.id;
-        chk.id = `filter-${scObj.id.replace(/\s+/g, '-')}`;
+        chk.type  = 'checkbox';
+        chk.value = `${cat}|${prov}`;
         chk.checked = true;
+        // give the native checkbox the same accent‐colour as the map pin
+        chk.style.accentColor = getComboColor(cat, prov);
         chk.onchange = () => {
-          const allSub = mainData.subCategories.every(s =>
-            document.getElementById(`filter-${s.id.replace(/\s+/g, '-')}`).checked
-          );
-          const noneSub = mainData.subCategories.every(s =>
-            !document.getElementById(`filter-${s.id.replace(/\s+/g, '-')}`).checked
-          );
-          mainCheckbox.checked = allSub;
-          mainCheckbox.indeterminate = !allSub && !noneSub;
+          // sync main indeterminate / all/none
+          const subs = Array.from(subCont.querySelectorAll('input[type="checkbox"]'));
+          const all  = subs.every(c=>c.checked);
+          const none = subs.every(c=>!c.checked);
+          mainChk.checked     = all;
+          mainChk.indeterminate = !all && !none;
           updateActiveViewDisplay();
         };
         lbl.appendChild(chk);
-        lbl.appendChild(document.createTextNode(` ${scObj.name}`));
-        subContainer.appendChild(lbl);
+        lbl.appendChild(document.createTextNode(` ${prov}`));
+        subCont.appendChild(lbl);
       });
-
-      groupDiv.appendChild(subContainer);
+      groupDiv.appendChild(subCont);
       filterPanelElement.appendChild(groupDiv);
     });
   }
+
 
   // ────────────────────────────────────────────────────────────────────────────
   // 6) Get filtered station data based on checked filters
   // ────────────────────────────────────────────────────────────────────────────
   function getFilteredStationData() {
-    const activeFilters = [];
-    filterPanelElement
-      .querySelectorAll('input[type="checkbox"]:checked')
-      .forEach(cb => {
-        if (!cb.id.startsWith('toggle-all-') && cb.value) {
-          activeFilters.push(cb.value);
-        }
-      });
-    if (!Array.isArray(allStationData)) return [];
+    // 1) find all of the province-sub-filters
+    const subCheckboxes = Array.from(
+      filterPanelElement.querySelectorAll(
+        'input[type="checkbox"]:not([id^="toggle-all-"])'
+      )
+    );
 
+    // 2) if there are no sub-filters (populateFilters hasn't run yet), show everything
+    if (subCheckboxes.length === 0) {
+      return allStationData;
+    }
+
+    // 3) collect which ones are checked
+    const activeSubs = subCheckboxes
+      .filter(cb => cb.checked)
+      .map(cb => cb.value);
+
+    // 4) if they're all checked, show everything
+    if (activeSubs.length === subCheckboxes.length) {
+      return allStationData;
+    }
+
+    // 5) if none are checked, fall back to the main “(All)” category toggles
+    if (activeSubs.length === 0) {
+      const activeCats = Array.from(
+        filterPanelElement.querySelectorAll('input[id^="toggle-all-"]:checked')
+      ).map(cb =>
+        cb.id
+          .replace('toggle-all-', '')
+          .replace(/-/g, ' ')
+      );
+      return allStationData.filter(st => activeCats.includes(st.category));
+    }
+
+    // 6) otherwise filter by the “Category|Province” strings
     return allStationData.filter(st => {
-      if (!st || !st.category) return false;
-      if (activeFilters.length === 0) {
-        // If no subfilters are checked, show those whose main category is still toggled on
-        let showParent = false;
-        filterPanelElement
-          .querySelectorAll('input[id^="toggle-all-"]:checked')
-          .forEach(mainTog => {
-            const mainKey = mainTog.id.replace('toggle-all-', '').replace(/-/g, ' ');
-            const stMainKey = st.category.includes(" ")
-              ? st.category.split(" ")[0].toLowerCase()
-              : st.category.toLowerCase();
-            if (stMainKey === mainKey.toLowerCase()) showParent = true;
-          });
-        return showParent;
-      }
-      return activeFilters.includes(st.category);
+      const combo = `${st.category}|${provinceOf(st)}`;
+      return activeSubs.includes(combo);
     });
   }
 
@@ -440,7 +426,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // choose color by priority or by asset‐type
       const color = isPriorityMapActive
         ? (PRIORITY_COLORS[String(st['Repair Priority'])] || 'grey')
-        : getMarkerColor(st.category);
+        : getComboColor(st.category, provinceOf(st));
       const marker = L.marker([lat, lon], {
         icon: createColoredIcon(color)
       });
@@ -775,16 +761,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 
+  // --------------------------------------------------------------------------------
+  // Replace your entire function displayStationDetailsQuickView with this:
   function displayStationDetailsQuickView(station) {
-    // Deep‐clone so we can safely mutate fields in memory
+    // Make a local copy for consistency with full-detail page
     currentEditingStation = JSON.parse(JSON.stringify(station));
     detailsPanelContent.innerHTML = '';
 
     // ─────────────────────────────────────────────────────────────────────────────
-    // 1) Render EDITABLE “General Information” box
+    // 1) READ-ONLY “General Information” box
     // ─────────────────────────────────────────────────────────────────────────────
-
-    // ─── EDITABLE “General Information” with password unlock ────────────────────
     const generalSectionDiv = document.createElement('div');
     generalSectionDiv.classList.add('quick-section');
     generalSectionDiv.style.border = '1px solid #ccc';
@@ -792,45 +778,12 @@ document.addEventListener('DOMContentLoaded', () => {
     generalSectionDiv.style.marginBottom = '10px';
     generalSectionDiv.dataset.sectionName = 'General Information';
 
-    // Title
-    const generalTitleBar = document.createElement('div');
-    generalTitleBar.style.fontWeight = 'bold';
-    generalTitleBar.textContent = 'General Information';
-    generalSectionDiv.appendChild(generalTitleBar);
+    const titleBar = document.createElement('div');
+    titleBar.style.fontWeight = 'bold';
+    titleBar.textContent = 'General Information';
+    generalSectionDiv.appendChild(titleBar);
 
-    // 0) Unlock button
-    let generalUnlocked = false;
-    const unlockBtn = document.createElement('button');
-    unlockBtn.textContent = '🔒 Unlock Editing';
-    unlockBtn.style.margin = '8px 0';
-    generalSectionDiv.appendChild(unlockBtn);
-
-    // helper: turn on all inputs except Status
-    function enableGeneralFields() {
-      generalUnlocked = true;
-      unlockBtn.disabled = true;
-      generalSectionDiv
-        .querySelectorAll('input[data-key]')
-        .forEach(input => {
-          if (input.dataset.key !== 'Status') {
-            input.disabled = false;
-          }
-        });
-    }
-
-    unlockBtn.addEventListener('click', async () => {
-      console.log('🔓 Unlock clicked!');
-      const pwd = await showPasswordDialog();
-      if (pwd === '1234') {      // ← your real password
-        enableGeneralFields();
-      } else if (pwd !== null) {
-        alert('Incorrect password.');
-      }
-    });
-
-
-    // 1) Helper to add each field
-    function addGeneralField(labelText, keyName, initialValue, alwaysEnabled = false) {
+    function addReadOnlyField(labelText, value, isSelect = false) {
       const rowDiv = document.createElement('div');
       rowDiv.style.display = 'flex';
       rowDiv.style.marginTop = '4px';
@@ -843,181 +796,83 @@ document.addEventListener('DOMContentLoaded', () => {
       rowDiv.appendChild(label);
 
       let field;
-      if (keyName === 'Repair Priority') {
-        // create a dropdown 1–5
-        field = document.createElement('select');
-        field.dataset.key = keyName;
-        field.disabled = !(alwaysEnabled || generalUnlocked);
-        field.style.flex = '1';
-        // options
-        const emptyOpt = document.createElement('option');
-        emptyOpt.value = '';
-        emptyOpt.textContent = '--';
-        field.appendChild(emptyOpt);
-        for (let i = 1; i <= 5; i++) {
-          const opt = document.createElement('option');
-          opt.value = String(i);
-          opt.textContent = String(i);
-          field.appendChild(opt);
-        }
-        // set current value
-        field.value = String(initialValue) || '';
-      } else {
-        // default: text input
+      if (isSelect) {
+        // for Repair Priority, Status, etc, you can decide if you want a select or just text
         field = document.createElement('input');
         field.type = 'text';
-        field.dataset.key = keyName;
-        field.disabled = !(alwaysEnabled || generalUnlocked);
-        field.value = initialValue != null ? String(initialValue) : '';
-        field.style.flex = '1';
+        field.value = value;
+      } else {
+        field = document.createElement('input');
+        field.type = 'text';
+        field.value = value != null ? String(value) : '';
       }
-
-      // on change, write back to model
-      field.addEventListener('change', e => {
-        currentEditingStation[keyName] = e.target.value;
-      });
-
+      field.disabled = true;
+      field.style.flex = '1';
       rowDiv.appendChild(field);
+
       generalSectionDiv.appendChild(rowDiv);
     }
 
+    // Core fields (all disabled)
+    addReadOnlyField('Station ID',       station.stationId);
+    addReadOnlyField('Category',         station.category);
+    addReadOnlyField('Site Name',        station.stationName);
+    addReadOnlyField('Province',         station.Province || station['General Information – Province']);
+    addReadOnlyField('Latitude',         station.latitude  || station.Latitude);
+    addReadOnlyField('Longitude',        station.longitude || station.Longitude);
+    addReadOnlyField('Status',           station.Status);
+    addReadOnlyField('Repair Priority',  station['Repair Priority']);
 
-    // 2) Now build each field:
-    addGeneralField('Station ID', 'Station ID', currentEditingStation.stationId);
-    addGeneralField('Category',   'Category',    currentEditingStation.category);
-    addGeneralField('Site Name',  'Site Name',   currentEditingStation['Site Name']);
-    addGeneralField('Province',   'Province',    currentEditingStation['Province']);
-    addGeneralField('Latitude',   'Latitude',    currentEditingStation.Latitude);
-    addGeneralField('Longitude',  'Longitude',   currentEditingStation.Longitude);
-    // Status stays editable from the start:
-    addGeneralField('Status',     'Status',      currentEditingStation.Status, /*alwaysEnabled=*/true);
-    // Repair Priority always editable, just like Status
-    addGeneralField(
-      'Repair Priority',            // label shown to the user
-      'Repair Priority',            // the exact Excel header / object key
-      currentEditingStation['Repair Priority'] || '', 
-      /*alwaysEnabled=*/true
-    );
-    // 3) finally append it:
     detailsPanelContent.appendChild(generalSectionDiv);
 
     // ─────────────────────────────────────────────────────────────────────────────
-    // 2) Build a map of existing sections from allStationData (Excel headers)
+    // 2) READ-ONLY “Extra Sections” (if any)
     // ─────────────────────────────────────────────────────────────────────────────
-    // Filter to same assetType
-    const thisAssetType = station.category;
-    const stationsOfThisType = allStationData.filter(s => s.category === thisAssetType);
+    const sectionsMap = buildSectionsMapFromExcelHeadersAndData(
+      allStationData.filter(s => s.category === station.category),
+      station
+    );
 
-    // Build sectionsMap purely by scanning allStationData (columns that include “ - ”)
-    const sectionsMap = buildSectionsMapFromExcelHeadersAndData(stationsOfThisType, currentEditingStation);
+    Object.entries(sectionsMap).forEach(([secName, entries]) => {
+      const secDiv = document.createElement('div');
+      secDiv.classList.add('quick-section');
+      secDiv.style.border = '1px solid #ccc';
+      secDiv.style.padding = '8px';
+      secDiv.style.marginBottom = '10px';
+      secDiv.dataset.sectionName = secName;
 
-    // ─────────────────────────────────────────────────────────────────────────────
-    // 3) Insert the “+ Add Section” button and the container for all extra sections
-    // ─────────────────────────────────────────────────────────────────────────────
-    const addSectionBtn = document.createElement('button');
-    addSectionBtn.textContent = '+ Add Section';
-    addSectionBtn.style.margin = '10px 0';
-    detailsPanelContent.appendChild(addSectionBtn);
+      const header = document.createElement('div');
+      header.style.fontWeight = 'bold';
+      header.textContent = secName;
+      secDiv.appendChild(header);
 
-    const quickSectionsContainer = document.createElement('div');
-    quickSectionsContainer.id = 'quickSectionsContainer';
-    detailsPanelContent.appendChild(quickSectionsContainer);
+      entries.forEach(({ fieldName, value }) => {
+        const row = document.createElement('div');
+        row.style.display = 'flex';
+        row.style.marginTop = '4px';
+        row.style.alignItems = 'center';
 
-    // 3a) Append any existing sections from sectionsMap
-    Object.keys(sectionsMap).forEach(secName => {
-      const entries = sectionsMap[secName].map(e => ({
-        fieldName: e.fieldName,
-        fullKey: e.fullKey,
-        value: e.value
-      }));
-      const secBlock = createQuickSectionBlock(secName, entries);
-      quickSectionsContainer.appendChild(secBlock);
+        const lbl = document.createElement('label');
+        lbl.textContent = `${fieldName}:`;
+        lbl.style.flex = '0 0 140px';
+        lbl.style.fontWeight = '600';
+        row.appendChild(lbl);
+
+        const inp = document.createElement('input');
+        inp.type = 'text';
+        inp.value = value != null ? String(value) : '';
+        inp.disabled = true;
+        inp.style.flex = '1';
+        row.appendChild(inp);
+
+        secDiv.appendChild(row);
+      });
+
+      detailsPanelContent.appendChild(secDiv);
     });
-
-    // 3b) Wire up “+ Add Section” to show prompt & append a new empty block
-    addSectionBtn.addEventListener('click', async () => {
-      const newSecName = await showSectionNameDialog('');
-      if (!newSecName) return; // user cancelled or entered empty
-      if (quickSectionsContainer.querySelector(`[data-section-name="${newSecName}"]`)) {
-        alert('Section already exists.');
-        return;
-      }
-      const secBlock = createQuickSectionBlock(newSecName, []);
-      quickSectionsContainer.appendChild(secBlock);
-      // By adding a brand‐new section, we simply let “Save Changes” add its columns in Excel
-    });
-
-    // ─────────────────────────────────────────────────────────────────────────────
-    // 4) “Save Changes” button at the bottom
-    // ─────────────────────────────────────────────────────────────────────────────
-    const saveBtn = document.createElement('button');
-    saveBtn.textContent = 'Save Changes';
-    saveBtn.id = 'quickSaveBtn';
-    saveBtn.style.marginTop = '12px';
-    detailsPanelContent.appendChild(saveBtn);
-
-    const msgDiv = document.createElement('div');
-    msgDiv.id = 'quickSaveMessage';
-    msgDiv.style.marginTop = '8px';
-    detailsPanelContent.appendChild(msgDiv);
-
-    saveBtn.addEventListener('click', async () => {
-      msgDiv.textContent = '';
-      saveBtn.disabled = true;
-
-      // --- 1) Required-field validation ---
-      const newId   = (currentEditingStation['Station ID'] || '').trim();
-      const newName = (currentEditingStation['Site Name']   || '').trim();
-      const latRaw  = currentEditingStation['Latitude'];
-      const lonRaw  = currentEditingStation['Longitude'];
-
-      if (!newId) {
-        msgDiv.textContent = '❗ Station ID cannot be blank.';
-        saveBtn.disabled = false;
-        return;
-      }
-      if (!newName) {
-        msgDiv.textContent = '❗ Site Name cannot be blank.';
-        saveBtn.disabled = false;
-        return;
-      }
-      const lat = parseFloat(latRaw), lon = parseFloat(lonRaw);
-      if (isNaN(lat) || isNaN(lon)) {
-        msgDiv.textContent = '❗ Latitude and Longitude must be valid numbers.';
-        saveBtn.disabled = false;
-        return;
-      }
-
-      // --- 2) Uniqueness check ---
-      // originalId: the station we’re editing (so we allow “no change”)
-      const originalId = station.stationId;  
-      const dup = allStationData.find(s =>
-        s.stationId === newId &&
-        !(s.stationId === originalId && s.category === currentEditingStation.category)
-      );
-      if (dup) {
-        msgDiv.textContent = `❗ Station ID "${newId}" is already used by another station.`;
-        saveBtn.disabled = false;
-        return;
-      }
-
-      // --- 3) If we pass those, go ahead and save ---
-      msgDiv.textContent = 'Saving…';
-      try {
-        const result = await window.electronAPI.saveStationData(currentEditingStation);
-        msgDiv.textContent = result.message;
-        if (result.success) {
-          await loadDataAndInitialize();
-        }
-      } catch (err) {
-        console.error('Quick-view save error:', err);
-        msgDiv.textContent = `Error: ${err.message}`;
-      } finally {
-        saveBtn.disabled = false;
-      }
-    });
-
   }
+  // --------------------------------------------------------------------------------
+
 
   // Helper: build one “quick‐view” editable section block
   function createQuickSectionBlock(sectionName, existingEntries = []) {
@@ -1349,6 +1204,7 @@ document.addEventListener('DOMContentLoaded', () => {
       );
       if (result.success) {
         currentStationDetailData = result.data;
+        currentEditingStation = JSON.parse(JSON.stringify(result.data.overview));
         renderStationDetailPageContent();
       } else {
         Object.values(detailSections).forEach(
@@ -1380,7 +1236,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function renderStationDetailPageContent() {
     if (!currentStationDetailData) return;
-    renderOverviewSection(currentStationDetailData.overview);
+    renderOverviewSection(currentEditingStation);
     renderFileListSection(
       detailSections.inspectionHistory,
       currentStationDetailData.inspectionHistory,
@@ -1395,62 +1251,165 @@ document.addEventListener('DOMContentLoaded', () => {
     renderPhotoGallerySection(detailSections.photos, currentStationDetailData.photos, "No photos found.");
   }
 
-  // Only display non-empty fields in the full detail page overview
-  function renderOverviewSection(overviewData) {
+  // ────────────────────────────────────────────────────────────────────────────
+  // Overview Tab: full editing UI, exactly like your old quick‐view editing
+  // ────────────────────────────────────────────────────────────────────────────
+  function renderOverviewSection(stationData) {
     const section = detailSections.overview;
     section.innerHTML = '';
 
-    const displayField = (label, value) => {
-      const p = document.createElement('p');
-      const strong = document.createElement('strong');
-      strong.textContent = `${label}: `;
-      p.appendChild(strong);
-      const span = document.createElement('span');
-      span.textContent = (value !== null && value !== undefined && value !== '') ? String(value) : 'N/A';
-      p.appendChild(span);
-      section.appendChild(p);
-    };
+    // keep an editable copy
+    currentEditingStation = JSON.parse(JSON.stringify(stationData));
 
-    displayField('Station ID', overviewData.stationId);
-    displayField('Category', overviewData.category);
-    displayField('Site Name', overviewData["Site Name"]);
-    displayField('Province', overviewData["General Information – Province"]);
-    displayField('Latitude', overviewData.Latitude);
-    displayField('Longitude', overviewData.Longitude);
-    displayField('Status', overviewData.Status);
+    // ────────────────
+    // 1) GENERAL INFO
+    // ────────────────
+    const generalDiv = document.createElement('div');
+    generalDiv.classList.add('quick-section');
+    generalDiv.style.border = '1px solid #ccc';
+    generalDiv.style.padding = '8px';
+    generalDiv.style.marginBottom = '10px';
+    generalDiv.dataset.sectionName = 'General Information';
 
-    // Show any other user-added fields (skip empty or core)
-    const coreFields = new Set([
-      'stationId',
-      'category',
-      'Site Name',
-      'General Information – Province',
-      'Latitude',
-      'Longitude',
-      'Status'
-    ]);
-    for (const key in overviewData) {
-      if (!overviewData.hasOwnProperty(key)) continue;
-      if (coreFields.has(key)) continue;
-      const val = overviewData[key];
-      if (val === null || val === undefined || val === '') continue;
-      let label = key.replace(/([A-Z](?=[a-z]))/g, ' $1').replace(/^./, str => str.toUpperCase());
-      displayField(label, val);
+    // Header + Unlock
+    const titleBar = document.createElement('div');
+    titleBar.style.display = 'flex';
+    titleBar.style.justifyContent = 'space-between';
+    titleBar.style.alignItems = 'center';
+
+    const title = document.createElement('strong');
+    title.textContent = 'General Information';
+    titleBar.appendChild(title);
+
+    let generalUnlocked = false;
+    const unlockBtn = document.createElement('button');
+    unlockBtn.textContent = '🔒 Unlock Editing';
+    titleBar.appendChild(unlockBtn);
+    unlockBtn.addEventListener('click', async () => {
+      const pwd = await showPasswordDialog();
+      if (pwd === '1234') {
+        generalUnlocked = true;
+        unlockBtn.disabled = true;
+        generalDiv.querySelectorAll('input[data-key], select[data-key]')
+          .forEach(el => {
+            if (el.dataset.key !== 'Status' && el.dataset.key !== 'Repair Priority') {
+              el.disabled = false;
+            }
+          });
+      } else if (pwd !== null) {
+        alert('Incorrect password.');
+      }
+    });
+
+    generalDiv.appendChild(titleBar);
+
+    // helper to add one field row
+    function addGeneralField(labelText, key, value, alwaysOn = false) {
+      const row = document.createElement('div');
+      row.style.display = 'flex';
+      row.style.marginTop = '4px';
+      row.style.alignItems = 'center';
+
+      const lbl = document.createElement('label');
+      lbl.textContent = labelText + ':';
+      lbl.style.flex = '0 0 140px';
+      lbl.style.fontWeight = '600';
+      row.appendChild(lbl);
+
+      let fld;
+      if (key === 'Repair Priority') {
+        fld = document.createElement('select');
+        fld.dataset.key = key;
+        fld.disabled = !(alwaysOn || generalUnlocked);
+        // options
+        ['',1,2,3,4,5].forEach(v => {
+          const o = document.createElement('option');
+          o.value = String(v);
+          o.textContent = v === '' ? '--' : String(v);
+          fld.appendChild(o);
+        });
+        fld.value = String(value || '');
+      } else {
+        fld = document.createElement('input');
+        fld.type = 'text';
+        fld.dataset.key = key;
+        fld.disabled = !(alwaysOn || generalUnlocked);
+        fld.value = value != null ? String(value) : '';
+      }
+
+      fld.style.flex = '1';
+      fld.addEventListener('change', e => {
+        currentEditingStation[key] = e.target.value;
+      });
+
+      row.appendChild(fld);
+      generalDiv.appendChild(row);
     }
 
-    // “Save Changes” for full detail page
+    // insert the core fields
+    addGeneralField('Station ID','Station ID', stationData.stationId);
+    addGeneralField('Category','Category', stationData.category);
+    addGeneralField('Site Name','Site Name', stationData['Site Name']);
+    addGeneralField('Province','General Information – Province', stationData['General Information – Province'] || overviewData.Province);
+    addGeneralField('Latitude','Latitude', stationData.Latitude);
+    addGeneralField('Longitude','Longitude', stationData.Longitude);
+    addGeneralField('Status','Status', stationData.Status, true);
+    addGeneralField('Repair Priority','Repair Priority', stationData['Repair Priority'], true);
+
+    section.appendChild(generalDiv);
+
+
+    // ────────────────
+    // 2) DYNAMIC SECTIONS
+    // ────────────────
+    // build the sectionsMap from your existing helper
+    const sameType = allStationData.filter(s => s.category === stationData.category);
+    const sectionsMap = buildSectionsMapFromExcelHeadersAndData(sameType, currentEditingStation);
+
+    // + Add Section
+    const addSecBtn = document.createElement('button');
+    addSecBtn.textContent = '+ Add Section';
+    addSecBtn.style.margin = '10px 0';
+    section.appendChild(addSecBtn);
+
+    const dynContainer = document.createElement('div');
+    dynContainer.id = 'quickSectionsContainer';
+    section.appendChild(dynContainer);
+
+    // render each existing section
+    Object.entries(sectionsMap).forEach(([secName, entries]) => {
+      const block = createQuickSectionBlock(secName, entries);
+      dynContainer.appendChild(block);
+    });
+
+    // wire up +Add Section
+    addSecBtn.addEventListener('click', async () => {
+      const newName = await showSectionNameDialog('');
+      if (!newName) return;
+      if (dynContainer.querySelector(`[data-section-name="${newName}"]`)) {
+        alert('Section already exists.');
+        return;
+      }
+      const block = createQuickSectionBlock(newName, []);
+      dynContainer.appendChild(block);
+    });
+
+
+    // ────────────────
+    // 3) SAVE CHANGES
+    // ────────────────
     const saveBtn = document.createElement('button');
     saveBtn.textContent = 'Save Changes';
-    saveBtn.id = 'saveChangesBtn';
-    saveBtn.style.marginTop = '15px';
+    saveBtn.style.marginTop = '12px';
     saveBtn.onclick = handleSaveChanges;
     section.appendChild(saveBtn);
 
     const msgDiv = document.createElement('div');
     msgDiv.id = 'saveMessage';
-    msgDiv.style.marginTop = '10px';
+    msgDiv.style.marginTop = '8px';
     section.appendChild(msgDiv);
   }
+
 
   function renderFileListSection(sectionElement, files, emptyMessage) {
     sectionElement.innerHTML = '';
@@ -2152,3 +2111,14 @@ const PALETTE = [
 ];
 let nextPaletteIndex = 0;              // “pointer” into PALETTE
 const assetTypeColorMap = {};          // maps assetType string → hex color
+
+// right under your PALETTE & nextPaletteIndex
+const comboColorMap = {};
+let comboNextIndex  = 0;
+function getComboColor(category, province) {
+  const key = `${category}|${province}`;
+  if (!comboColorMap[key]) {
+    comboColorMap[key] = PALETTE[ comboNextIndex++ % PALETTE.length ];
+  }
+  return comboColorMap[key];
+}
