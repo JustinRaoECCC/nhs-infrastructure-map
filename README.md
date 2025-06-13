@@ -31,5 +31,10 @@ npm start
 
 ## 🪲 Current Bugs/TODO list
 
+- For some reason created a new column when province (and maybe others) was edited for cableway BC
+- For some reason cannot edit the province for weir (and maybe others)
+- A section without a field cannot be edited
+
+
 - Turn into an actual desktop application where the site xlsx documents are saved to a network/sharepoint
 - Will more than one person be able to have the app open at once?
