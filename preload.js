@@ -22,9 +22,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   addNewLocation:       (loc) => ipcRenderer.invoke('add-new-location', loc),
   addNewAssetType:      (atype) => ipcRenderer.invoke('add-new-asset-type', atype),
   createNewStation:     (stationObj) => ipcRenderer.invoke('create-new-station', stationObj),
-
-  // Secret Pong Game
-  openPong: () => ipcRenderer.send('open-pong'),
+  openPong:             () => ipcRenderer.send('open-pong'),
 
   // Nuke
   deleteAllDataFiles: () => ipcRenderer.invoke('delete-all-data-files'),
