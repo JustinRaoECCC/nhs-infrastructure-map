@@ -1350,7 +1350,7 @@ document.addEventListener('DOMContentLoaded', () => {
     addGeneralField('Station ID','Station ID', stationData.stationId);
     addGeneralField('Category','Category', stationData.category);
     addGeneralField('Site Name','Site Name', stationData['Site Name']);
-    addGeneralField('Province','General Information – Province', stationData['General Information – Province'] || overviewData.Province);
+    addGeneralField('Province','Province', stationData.Province || stationData['General Information – Province']);
     addGeneralField('Latitude','Latitude', stationData.Latitude);
     addGeneralField('Longitude','Longitude', stationData.Longitude);
     addGeneralField('Status','Status', stationData.Status, true);
