@@ -486,38 +486,76 @@ ipcMain.handle('get-station-data', async () => {
 
 /**
  * save-station-data:
- *   - Updates an existing station row, handles adding/removing columns.
+ *   - Updates an existing station row, handles adding/removing columns
+ *     across every province sheet in the asset-type workbook.
  */
 ipcMain.handle('save-station-data', async (event, updatedStation) => {
   try {
-    const at         = updatedStation.category;
-    const dataPath   = path.join(DATA_DIR, `${at}.xlsx`);
-    const workbook   = new ExcelJS.Workbook();
+    const at       = updatedStation.category;
+    const dataPath = path.join(DATA_DIR, `${at}.xlsx`);
+    const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.readFile(dataPath);
 
-    // Try all possible province keys in order:
-    //  1) if you added “General Information – Province” as a header
-    //  2) the simpler “Province” header
-    //  3) your own fallback field
+    // Determine the target province sheet name
     const province =
       updatedStation['General Information – Province'] ||
       updatedStation.Province ||
       updatedStation.province;
-
     if (!province) {
       return { success: false, message: 'No province specified for station.' };
     }
 
+    // ─── Global header sync across ALL sheets ────────────────────────────────
+    // Core columns that must always exist:
+    const CORE = new Set([
+      'Station ID','Asset Type','Site Name',
+      'Province','Latitude','Longitude',
+      'Status','Repair Priority'
+    ]);
+
+    // All other keys from updatedStation become desired columns:
+    const newCols = Object.keys(updatedStation)
+      .filter(k => !['stationId','stationName','latitude','longitude','category'].includes(k));
+    const targetHeaders = Array.from(new Set([ ...CORE, ...newCols ]));
+
+    // For each worksheet in the workbook, remove unwanted cols & add missing ones
+    workbook.worksheets.forEach(ws => {
+      // 1) Read existing headers (row 2)
+      const existing = [];
+      ws.getRow(2).eachCell((cell, idx) => {
+        existing[idx - 1] = cell.value ? String(cell.value).trim() : null;
+      });
+
+      // 2) Remove any non-CORE header not in targetHeaders
+      for (let i = existing.length - 1; i >= 0; i--) {
+        const hdr = existing[i];
+        if (hdr && !CORE.has(hdr) && !newCols.includes(hdr)) {
+          ws.spliceColumns(i + 1, 1);
+          existing.splice(i, 1);
+        }
+      }
+
+      // 3) Append any headers from targetHeaders that are missing
+      targetHeaders.forEach(hdr => {
+        if (!existing.includes(hdr)) {
+          const colIndex = existing.length + 1;
+          const cell = ws.getRow(2).getCell(colIndex);
+          cell.value     = hdr;
+          cell.font      = { bold: true };
+          cell.alignment = { horizontal:'left', vertical:'middle' };
+          existing.push(hdr);
+        }
+      });
+    });
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // Now select the single-province sheet and proceed to update its row
     const worksheet = workbook.getWorksheet(province);
     if (!worksheet) {
       return { success: false, message: `Worksheet "${province}" not found in ${at}.xlsx` };
     }
 
-    if (!worksheet) {
-      return { success: false, message: `Sheet "${province}" not found in ${at}.xlsx` };
-    }
-
-    // Read headers row 2
+    // Read headers again (after global sync)
     const hdrRow = worksheet.getRow(2);
     if (!hdrRow.hasValues) {
       return { success: false, message: 'No header row (row 2) found.' };
@@ -529,12 +567,12 @@ ipcMain.handle('save-station-data', async (event, updatedStation) => {
     const headerMap = {};
     headers.forEach((h, i) => { if (h) headerMap[h] = i + 1; });
 
-    // Find row index for this station
-    const idCol    = headerMap['Station ID'];
-    let rowIndex   = -1;
+    // Find the data row for our stationId
+    const idCol  = headerMap['Station ID'];
+    let rowIndex = -1;
     for (let r = 3; r <= worksheet.rowCount; r++) {
-      const cellVal = worksheet.getRow(r).getCell(idCol).value;
-      if (cellVal && String(cellVal).trim() === String(updatedStation.stationId).trim()) {
+      const val = worksheet.getRow(r).getCell(idCol).value;
+      if (val && String(val).trim() === String(updatedStation.stationId).trim()) {
         rowIndex = r;
         break;
       }
@@ -543,50 +581,30 @@ ipcMain.handle('save-station-data', async (event, updatedStation) => {
       return { success: false, message: `Station ID ${updatedStation.stationId} not found.` };
     }
 
-    // Core headers never removed
-    const CORE = new Set([
-      'Station ID','Asset Type','Site Name',
-      'Province','Latitude','Longitude',
-      'Status','Repair Priority'
-    ]);
-
-    // Remove any columns the user deleted
-    const updatedKeys = new Set(Object.keys(updatedStation));
-    for (let i = headers.length - 1; i >= 0; i--) {
-      const h = headers[i];
-      if (!h || CORE.has(h)) continue;
-      if (!updatedKeys.has(h)) {
-        worksheet.spliceColumns(i + 1, 1);
-        headers.splice(i, 1);
-      }
-    }
-
-    // Rebuild headerMap
-    const newHdrRow = worksheet.getRow(2);
-    const newHeaders = [];
+    // Prepare header list & map for adding truly new columns if needed
+    const newHdrRow   = worksheet.getRow(2);
+    const newHeaders  = [];
     newHdrRow.eachCell((cell, idx) => {
       const v = cell.value ? String(cell.value).trim() : null;
       newHeaders[idx - 1] = v;
       if (v) headerMap[v] = idx;
     });
 
-    // Helper to add new header column
     function addHeader(key) {
-      const last = newHeaders.length;
-      worksheet.spliceColumns(last + 1, 0, []);
-      const c = worksheet.getRow(2).getCell(last + 1);
+      const col = newHeaders.length + 1;
+      worksheet.spliceColumns(col, 0, []);
+      const c = worksheet.getRow(2).getCell(col);
       c.value     = key;
       c.font      = { bold: true };
       c.alignment = { horizontal:'left', vertical:'middle' };
       newHeaders.push(key);
-      headerMap[key] = last + 1;
-      return last + 1;
+      headerMap[key] = col;
+      return col;
     }
 
-    // Write values
+    // Write each updatedStation field into the row
     const rowToUpdate = worksheet.getRow(rowIndex);
     for (const [key, val] of Object.entries(updatedStation)) {
-      // Skip convenience keys
       if (['stationId','stationName','latitude','longitude','category'].includes(key)) {
         continue;
       }
@@ -603,15 +621,18 @@ ipcMain.handle('save-station-data', async (event, updatedStation) => {
         cell.value = val;
       }
     }
-
     rowToUpdate.commit();
+
+    // Persist workbook
     await workbook.xlsx.writeFile(dataPath);
     return { success: true, message: 'Station data saved successfully.' };
+
   } catch (err) {
     console.error('save-station-data error:', err);
     return { success: false, message: err.message };
   }
 });
+
 
 /**
  * get-station-file-details:
