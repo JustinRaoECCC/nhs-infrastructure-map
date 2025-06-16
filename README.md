@@ -43,9 +43,7 @@ npm start
 
 June 16th, 2025 full system test
 
-Add Infrastructure
-- Saving a new location doesn't automatically open the rest of the menu, you need to deselect and then reselect from the dropdown
-    - This error is not present for the Asset Type dropdown
+
 
 Overall system
 - Randomly doesn't let me type, and the only fix is to rerun the app or wait some time

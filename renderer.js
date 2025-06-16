@@ -711,6 +711,11 @@ document.addEventListener('DOMContentLoaded', () => {
         z-index: 10000;
       `;
 
+      // allow clicking outside the box to cancel
+      overlay.addEventListener('click', e => {
+        if (e.target === overlay) cleanup(null);
+      });
+
       // build box
       const box = document.createElement('div');
       box.style = `
@@ -734,18 +739,27 @@ document.addEventListener('DOMContentLoaded', () => {
       const input = box.querySelector('#pwInput');
       input.focus();
 
+      // allow Escape key to cancel
+      const escHandler = e => {
+        if (e.key === 'Escape') cleanup(null);
+      };
+      document.addEventListener('keydown', escHandler);
+
       // cleanup helper
-      function close(val) {
-        document.body.removeChild(overlay);
+      function cleanup(val) {
+        document.removeEventListener('keydown', escHandler);
+        overlay.remove();
         resolve(val);
+        // restore focus
+        document.body.focus();
       }
 
       // cancel
-      box.querySelector('#pwCancel').onclick = () => close(null);
+      box.querySelector('#pwCancel').onclick = () => cleanup(null);
       // ok
       box.querySelector('#pwOk').onclick = () => {
         const v = input.value.trim();
-        close(v.length ? v : null);
+        cleanup(v.length ? v : null);
       };
 
       // enter key
@@ -1765,6 +1779,7 @@ document.addEventListener('DOMContentLoaded', () => {
       await loadLookups(newLoc, prevAT);
       inputNewLocation.value = '';
       selectLocation.value = newLoc;
+      selectLocation.dispatchEvent(new Event('change'));
       maybeShowGeneralForm();
     } else {
       alert('Error saving new location: ' + res.message);
