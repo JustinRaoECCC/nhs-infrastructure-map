@@ -30,7 +30,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Bulk import helpers
   chooseExcelFile:        ()              => ipcRenderer.invoke('choose-excel-file'),
   getExcelSheetNames:     (filePath)      => ipcRenderer.invoke('get-excel-sheet-names', filePath),
-  importStationsFromExcel:(filePath, sheet) => ipcRenderer.invoke('import-stations-from-excel', filePath, sheet)
+  importStationsFromExcel:(filePath, sheet) => ipcRenderer.invoke('import-stations-from-excel', filePath, sheet),
 
+  // at the bottom of your existing exposed API:
+  getSavedColors:    () => ipcRenderer.invoke('get-saved-colors'),
+  saveColor:         (cat, prov, col) => ipcRenderer.invoke('save-color', cat, prov, col)
 
 });

@@ -28,15 +28,19 @@
     <div class="title-bar">
       <h1>NHS Infrastructure Map</h1>
       <div class="buttons-bar">
-        <button id="btnSwitchToList">Switch to List</button>
-        <button
-          id="btnPriorityMap"
-          title="Priority Map: 1 (High) → Red; 2 → Orange; 3 → Yellow; 4 → Green; 5 (Low) → Blue; None → Grey"
-        >
-          Priority Map
-        </button>        
-        <button id="btnRepairsPriority">Repairs Priority</button>
+        <select id="viewModeSelect" title="Select view">
+          <option value="map">Map View</option>
+          <option value="list">List View</option>
+          <option value="repairs">Priority View</option>
+        </select>
+
+        <select id="mapStyleSelect" title="Select map style">
+          <option value="categorized">Categorized Map</option>
+          <option value="priority">Priority Map</option>
+        </select>
+
         <button id="btnDownload">Download</button>
+
 
         <div id="listViewControls" style="display: none; align-items: center; margin-left: 10px;">
           <label for="sortSelect" style="margin-right:4px;">Sort by:</label>

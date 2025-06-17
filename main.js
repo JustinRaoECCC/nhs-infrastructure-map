@@ -938,6 +938,45 @@ ipcMain.handle('import-stations-from-excel', async (e, filePath, sheetName) => {
 });
 
 
+// ─── Colour‐Picker Persistence ───────────────────────────────────────────────────
+// Read saved colours from lookups.xlsx → { "Category|Province": "#rrggbb", … }
+ipcMain.handle('get-saved-colors', async () => {
+  const wb = await loadLookupWorkbook();
+  let sheet = wb.getWorksheet('Colors');
+  if (!sheet) {
+    sheet = wb.addWorksheet('Colors');
+    sheet.addRow(['Category','Province','Color']);
+    await wb.xlsx.writeFile(LOOKUPS_PATH);
+  }
+  const map = {};
+  sheet.eachRow((row, rn) => {
+    if (rn < 2) return;
+    const [cat, prov, col] = row.values.slice(1);
+    if (cat && prov && col) map[`${cat}|${prov}`] = col;
+  });
+  return map;
+});
+
+// Save or update one combo’s colour
+ipcMain.handle('save-color', async (_e, category, province, color) => {
+  const wb = await loadLookupWorkbook();
+  let sheet = wb.getWorksheet('Colors');
+  if (!sheet) sheet = wb.addWorksheet('Colors');
+  let found = false;
+  sheet.eachRow((row, rn) => {
+    if (rn < 2) return;
+    const [cat, prov] = row.values.slice(1);
+    if (cat === category && prov === province) {
+      row.getCell(3).value = color;
+      found = true;
+    }
+  });
+  if (!found) sheet.addRow([category, province, color]);
+  await wb.xlsx.writeFile(LOOKUPS_PATH);
+  return { success: true };
+});
+
+
 ipcMain.on('open-pong', () => {
   const games = ['data/pong.html'];
   const chosen = games[Math.floor(Math.random() * games.length)];

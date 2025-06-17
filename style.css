@@ -480,3 +480,56 @@ body, html {
   top: 0;
   z-index: 5;
 }
+
+/* ─── Toolbar styling ───────────────────────────────────────────────── */
+.title-bar .buttons-bar {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.title-bar .buttons-bar select,
+.title-bar .buttons-bar button {
+  padding: 6px 12px;
+  font-size: 0.9rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background-color: #fff;
+  cursor: pointer;
+  transition: background-color 0.2s, box-shadow 0.2s;
+}
+
+.title-bar .buttons-bar select {
+  /* remove default OS arrow if you like */
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23666'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 10px 6px;
+  padding-right: 32px; /* room for our arrow */
+}
+
+.title-bar .buttons-bar select:focus,
+.title-bar .buttons-bar button:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
+}
+
+.title-bar .buttons-bar button {
+  background-color: #007bff;
+  border-color: #007bff;
+  color: white;
+}
+
+.title-bar .buttons-bar button:hover {
+  background-color: #0069d9;
+}
+
+/* Optional: tighten up the Download button icon if you have one */
+.title-bar .buttons-bar #btnDownload {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}

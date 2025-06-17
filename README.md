@@ -56,10 +56,6 @@ Editing/saving
 Excel Bugs
 - The other sections beyond General Information are not being copied to every excel, BUT they are stll being updated on the application, but not the deleting thing as I mentioned previously
 
-TODO (not bugs)
-- Make it so everytime the Map and List and Repair Priority views are toggled, the Quick View is reset to no specific station. This will fix the error that the quick view doesnt update until it is reclicked on.
-- Hovering mouse over the station in map view should open the Quick-view, but CLICKING should open the specific station details page
-- Specific filter colours can be chosen
 
 TODO (need to ask Khodi)
 - When a station is made inactive, should it grey out and fully switch Asset Type to INACTIVE

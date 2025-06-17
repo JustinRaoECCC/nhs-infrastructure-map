@@ -7,7 +7,12 @@
 // All “section templates” are derived from the Excel headers via IPC – we no longer use localStorage.
 //
 // ─────────────────────────────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+
+  // Load colours
+  const saved = await window.electronAPI.getSavedColors();
+  Object.assign(comboColorMap, saved);
+
   // ────────────────────────────────────────────────────────────────────────────
   // 1) Leaflet Map Initialization
   // ────────────────────────────────────────────────────────────────────────────
@@ -29,7 +34,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const mapContainer         = document.getElementById('map');
   const listViewContainer    = document.getElementById('listViewContainer');
   const stationListBody      = document.getElementById('stationListBody');
-  const btnSwitchToList      = document.getElementById('btnSwitchToList');
   const listViewControls  = document.getElementById('listViewControls');
 
   const mainViewWrapper      = document.getElementById('mainViewWrapper');
@@ -50,7 +54,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const repairsSortSelect      = document.getElementById('repairsSortSelect');
   const repairsViewControls    = document.getElementById('repairsViewControls');
 
-  const btnPriorityMap          = document.getElementById('btnPriorityMap');
+
+    // ─── New: dropdowns instead of buttons ─────────────────────────────────────
+  const viewModeSelect = document.getElementById('viewModeSelect');
+  const mapStyleSelect = document.getElementById('mapStyleSelect');
 
 
   // Bulk-import controls
@@ -95,15 +102,52 @@ document.addEventListener('DOMContentLoaded', () => {
     '':  'grey'   // none
   };
 
-  btnPriorityMap.addEventListener('click', () => {
-    isPriorityMapActive = !isPriorityMapActive;
-    // Flip the label:
-    btnPriorityMap.textContent = isPriorityMapActive
-      ? 'Normal Map'
-      : 'Priority Map';
-    // Re-draw markers:
-    updateMapDisplay();
+    
+  // New stuff yay
+  // ─── View‐mode selector ────────────────────────────────────────────────────
+  viewModeSelect.addEventListener('change', e => {
+    // clear quick‐view
+    currentEditingStation = null;
+    detailsPanelContent.innerHTML = '<p>Click a station or hover in list.</p>';
+
+    const mode = e.target.value;
+    // hide all:
+    mapContainer.classList.add('hidden');
+    listViewContainer.classList.add('hidden');
+    repairsViewContainer.classList.add('hidden');
+    listViewControls.style.display   = 'none';
+    repairsViewControls.style.display = 'none';
+
+    if (mode === 'map') {
+      isListViewActive    = false;
+      isRepairsViewActive = false;
+      mapContainer.classList.remove('hidden');
+      updateMapDisplay();
+
+    } else if (mode === 'list') {
+      isListViewActive    = true;
+      isRepairsViewActive = false;
+      listViewContainer.classList.remove('hidden');
+      listViewControls.style.display = 'flex';
+      updateListViewDisplay();
+
+    } else if (mode === 'repairs') {
+      isListViewActive    = false;
+      isRepairsViewActive = true;
+      repairsViewContainer.classList.remove('hidden');
+      repairsViewControls.style.display = 'flex';
+      updateRepairsViewDisplay();
+    }
   });
+
+  // ─── Map‐style selector ────────────────────────────────────────────────────
+  mapStyleSelect.addEventListener('change', e => {
+    isPriorityMapActive = (e.target.value === 'priority');
+    if (!isListViewActive && !isRepairsViewActive) {
+      updateMapDisplay();
+    }
+  });
+
 
 
 
@@ -340,27 +384,49 @@ document.addEventListener('DOMContentLoaded', () => {
       // sub-checkboxes by province
       const subCont = document.createElement('div');
       subCont.style.paddingLeft = '20px';
+
       Array.from(map[cat]).sort().forEach(prov => {
+        const comboKey = `${cat}|${prov}`;
+
+        // 1) Checkbox
         const lbl = document.createElement('label');
         const chk = document.createElement('input');
-        chk.type  = 'checkbox';
-        chk.value = `${cat}|${prov}`;
-        chk.checked = true;
-        // give the native checkbox the same accent‐colour as the map pin
+        chk.type      = 'checkbox';
+        chk.value     = comboKey;
+        chk.checked   = true;
         chk.style.accentColor = getComboColor(cat, prov);
         chk.onchange = () => {
-          // sync main indeterminate / all/none
           const subs = Array.from(subCont.querySelectorAll('input[type="checkbox"]'));
-          const all  = subs.every(c=>c.checked);
-          const none = subs.every(c=>!c.checked);
+          const all  = subs.every(c=>c.checked), none = subs.every(c=>!c.checked);
           mainChk.checked     = all;
           mainChk.indeterminate = !all && !none;
           updateActiveViewDisplay();
         };
         lbl.appendChild(chk);
         lbl.appendChild(document.createTextNode(` ${prov}`));
+
+        // 2) Colour-picker
+        const picker = document.createElement('input');
+        picker.type  = 'color';
+        // initialize to saved or default
+        picker.value = comboColorMap[comboKey] || getComboColor(cat, prov);
+        picker.title = `Colour for ${cat} / ${prov}`;
+        picker.style.marginLeft = '6px';
+        picker.addEventListener('change', async e => {
+          const newColor = e.target.value;
+          // 1) store it
+          comboColorMap[comboKey] = newColor;
+          // 2) immediately update the checkbox style
+          chk.style.accentColor = newColor;
+          // 3) persist
+          await window.electronAPI.saveColor(cat, prov, newColor);
+          // 4) redraw map/list
+          updateActiveViewDisplay();
+        });
+        lbl.appendChild(picker);
         subCont.appendChild(lbl);
       });
+
       groupDiv.appendChild(subCont);
       filterPanelElement.appendChild(groupDiv);
     });
@@ -416,7 +482,10 @@ document.addEventListener('DOMContentLoaded', () => {
   // 7) Update map display with filtered stations
   // ────────────────────────────────────────────────────────────────────────────
   function updateMapDisplay() {
+    // Clear out old markers
     currentMarkers.clearLayers();
+
+    // Get the stations we should show
     const filtered = getFilteredStationData();
     console.log("Renderer: Updating map with", filtered.length, "stations.");
 
@@ -425,29 +494,41 @@ document.addEventListener('DOMContentLoaded', () => {
       const lon = parseFloat(st.longitude);
       if (isNaN(lat) || isNaN(lon)) return;
 
-      // choose color by priority or by asset‐type
+      // Choose color by priority or by asset‐type
       const color = isPriorityMapActive
         ? (PRIORITY_COLORS[String(st['Repair Priority'])] || 'grey')
         : getComboColor(st.category, provinceOf(st));
+
+      // Create a marker
       const marker = L.marker([lat, lon], {
         icon: createColoredIcon(color)
       });
 
-      marker.bindPopup(`<b>${st.stationName || 'N/A'}</b><br>ID: ${st.stationId || 'N/A'}`);
-      marker.on('click', () => {
+      // Hover to show quick-view
+      marker.on('mouseover', () => {
+        // Ensure the details panel is visible
         if (detailsPanelElement && detailsPanelElement.classList.contains('collapsed')) {
           toggleRightPanelButton.click();
         }
+        // Populate quick-view
         displayStationDetailsQuickView(st);
       });
+
+      // Click to open full detail page
+      marker.on('click', () => {
+        openStationDetailPage(st);
+      });
+
       currentMarkers.addLayer(marker);
     });
 
+    // Finally, re-invalidate the map size so it draws correctly
     if (mapContainer && !isListViewActive && !mapContainer.classList.contains('hidden')) {
       console.log("Renderer: Invalidating map size after map update.");
       map.invalidateSize();
     }
   }
+
 
   // ────────────────────────────────────────────────────────────────────────────
   // 8) Sort station array based on currentSortOption
@@ -644,35 +725,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 
-
-  // ────────────────────────────────────────────────────────────────────────────
-  // 10) Switch between map‐view and list‐view
-  // ────────────────────────────────────────────────────────────────────────────
-  btnSwitchToList.addEventListener('click', () => {
-    // If we’re in Repairs view, shut it down first
-    if (isRepairsViewActive) {
-      repairsViewContainer.classList.add('hidden');
-      repairsViewControls.style.display = 'none';
-      btnRepairsPriority.textContent  = 'Repairs Priority';
-      isRepairsViewActive             = false;
-    }
-
-    // Now toggle list ↔ map as before
-    isListViewActive = !isListViewActive;
-    if (isListViewActive) {
-      mapContainer.classList.add('hidden');
-      listViewContainer.classList.remove('hidden');
-      listViewControls.style.display = 'flex';
-      btnSwitchToList.textContent     = 'Switch to Map';
-      updateListViewDisplay();
-    } else {
-      listViewContainer.classList.add('hidden');
-      mapContainer.classList.remove('hidden');
-      listViewControls.style.display = 'none';
-      btnSwitchToList.textContent     = 'Switch to List';
-      updateMapDisplay();
-    }
-  });
 
 
 
@@ -1670,43 +1722,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (isListViewActive) updateListViewDisplay();
   });
 
-  // “Repairs Priority” stub
-  btnRepairsPriority.addEventListener('click', () => {
-    if (!isRepairsViewActive) {
-      // entering Repairs view
-      previousView = isListViewActive ? 'list' : 'map';
-
-      // hide map & list + their controls
-      mapContainer.classList.add('hidden');
-      listViewContainer.classList.add('hidden');
-      listViewControls.style.display = 'none';
-
-      // show repairs table + its controls
-      repairsViewContainer.classList.remove('hidden');
-      repairsViewControls.style.display = 'flex';
-      btnRepairsPriority.textContent = 'Back';
-
-      updateRepairsViewDisplay();
-      isRepairsViewActive = true;
-
-    } else {
-      // returning to previous view
-      repairsViewContainer.classList.add('hidden');
-      repairsViewControls.style.display = 'none';
-      btnRepairsPriority.textContent = 'Repairs Priority';
-
-      if (previousView === 'list') {
-        listViewContainer.classList.remove('hidden');
-        listViewControls.style.display = 'flex';
-        updateListViewDisplay();
-      } else {
-        mapContainer.classList.remove('hidden');
-        updateMapDisplay();
-      }
-
-      isRepairsViewActive = false;
-    }
-  });
   document.getElementById('btnDownload').addEventListener('click', async () => {
     const btn = document.getElementById('btnDownload');
     const oldText = btn.textContent;
@@ -2064,7 +2079,6 @@ document.addEventListener('DOMContentLoaded', () => {
           isListViewActive = false;
           listViewContainer.classList.add('hidden');
           mapContainer.classList.remove('hidden');
-          btnSwitchToList.textContent = 'Switch to List';
         }
         updateMapDisplay();
 
