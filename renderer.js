@@ -68,6 +68,8 @@ document.addEventListener('DOMContentLoaded', () => {
   let allStationData           = [];
   let currentMarkers           = L.layerGroup().addTo(map);
   let currentEditingStation    = null;    // used by quick‐view to track edits
+  // Track which station ID we’re editing, so saves can find the right record
+  let originalEditingStationId = null;
   let currentStationDetailData = null;    // used by full detail page
   let isListViewActive         = false;
   let hoverTimeout             = null;
@@ -1173,42 +1175,109 @@ document.addEventListener('DOMContentLoaded', () => {
   // ────────────────────────────────────────────────────────────────────────────
   async function handleSaveChanges() {
     if (!currentEditingStation) return;
-    const saveBtn = document.getElementById('saveChangesBtn');
-    const msgDiv  = document.getElementById('saveMessage');
 
-    msgDiv.textContent = 'Saving...';
+    // 1) Grab the current Save button & message div
+    let saveBtn = document.getElementById('saveChangesBtn');
+    let msgDiv  = document.getElementById('saveMessage');
+
+    // 2) Show “Saving…” and disable button
+    msgDiv.textContent = 'Saving…';
     if (saveBtn) saveBtn.disabled = true;
+
     try {
+      // 3) Persist changes to Excel
       const result = await window.electronAPI.saveStationData(currentEditingStation);
-      msgDiv.textContent = result.message;
+
       if (result.success) {
-        const idx = allStationData.findIndex(
-          s => s.stationId === currentEditingStation.stationId && s.category === currentEditingStation.category
+        // 4) Update your in-memory allStationData
+        let idx = allStationData.findIndex(
+          s => s.stationId === originalEditingStationId
+              && s.category  === currentEditingStation.category
         );
+        if (idx === -1) {
+          idx = allStationData.findIndex(s => s.stationId === originalEditingStationId);
+        }
         if (idx !== -1) {
           allStationData[idx] = JSON.parse(JSON.stringify(currentEditingStation));
+
+          // Sync numeric coords
+          const rec    = allStationData[idx];
+          const newLat = parseFloat(currentEditingStation.Latitude);
+          const newLon = parseFloat(currentEditingStation.Longitude);
+          if (!isNaN(newLat)) rec.latitude = newLat;
+          if (!isNaN(newLon)) rec.longitude = newLon;
+
+          // Sync ID & Site Name
+          const newId   = currentEditingStation['Station ID'];
+          const newName = currentEditingStation['Site Name'];
+          if (newId)   rec.stationId   = newId;
+          if (newName) rec.stationName = newName;
+
+          // Update tracker
+          originalEditingStationId = currentEditingStation.stationId;
         }
+
+        // 5) Sync the detail-page model
+        if (currentStationDetailData) {
+          currentStationDetailData.overview = JSON.parse(
+            JSON.stringify(currentEditingStation)
+          );
+        }
+
+        // 6) Redraw map or list
         updateActiveViewDisplay();
+
+        // 7) If Overview tab is active, re-render it (this recreates the Save UI)
+        const overviewBtn = document.querySelector(
+          '.detail-nav-btn[data-section="overview"]'
+        );
+        if (overviewBtn && overviewBtn.classList.contains('active')) {
+          renderOverviewSection(currentEditingStation);
+        }
+
+        // 8) Update the page title
+        stationDetailTitle.textContent =
+          `${currentEditingStation.stationName} (${currentEditingStation.stationId})`;
+
+        // 9) **Re-query** the freshly rendered Save button & message div
+        saveBtn = document.getElementById('saveChangesBtn');
+        msgDiv  = document.getElementById('saveMessage');
+
+        // 10) Show “Saved!” permanently (until next click or navigation away)
+        msgDiv.textContent = 'Saved!';
+      } else {
+        // On API failure
+        msgDiv.textContent = result.message || 'Save failed.';
       }
     } catch (err) {
       console.error('Error saving station:', err);
       msgDiv.textContent = `Error: ${err.message}`;
     } finally {
+      // 11) Re-query & re-enable the button
+      saveBtn = document.getElementById('saveChangesBtn');
       if (saveBtn) saveBtn.disabled = false;
     }
   }
+
+
+
 
   // ────────────────────────────────────────────────────────────────────────────
   // 14) “Full” station detail page (on click), with tabbed sections
   // ────────────────────────────────────────────────────────────────────────────
   async function openStationDetailPage(stationFromExcel) {
+    // 1) Show the detail page
     mainViewWrapper.classList.add('hidden');
     stationDetailPage.classList.remove('hidden');
-    // Hide Add Infrastructure button
     document.getElementById('btnAddInfra').classList.add('hidden');
-    stationDetailTitle.textContent = `${stationFromExcel.stationName || 'N/A'} (${stationFromExcel.stationId || 'N/A'})`;
+    stationDetailTitle.textContent =
+      `${stationFromExcel.stationName || 'N/A'} (${stationFromExcel.stationId || 'N/A'})`;
 
-    Object.values(detailSections).forEach(section => section.innerHTML = '<p>Loading...</p>');
+    // 2) Remember the pre-edit ID for later
+    originalEditingStationId = stationFromExcel.stationId;
+
+    // 3) Show “Loading…” until we fetch folder contents
+    Object.values(detailSections).forEach(sec => sec.innerHTML = '<p>Loading...</p>');
     setActiveDetailSection('overview');
 
     try {
@@ -1216,26 +1285,34 @@ document.addEventListener('DOMContentLoaded', () => {
         stationFromExcel.stationId,
         stationFromExcel
       );
+
       if (result.success) {
+        // Keep the raw file-detail data for tabs & folders
         currentStationDetailData = result.data;
-        currentEditingStation = JSON.parse(JSON.stringify(result.data.overview));
+        // Clone into our in-memory editor buffer
+        currentEditingStation   = JSON.parse(JSON.stringify(result.data.overview));
         renderStationDetailPageContent();
       } else {
+        // If folder-lookup fails, fall back to just Excel values
         Object.values(detailSections).forEach(
-          section => section.innerHTML = `<p>Error loading details: ${result.message || 'Unknown error'}</p>`
+          sec => sec.innerHTML = `<p>Error loading details: ${result.message}</p>`
         );
         detailSections.overview.innerHTML = '';
         renderOverviewSection(stationFromExcel);
+        // Still seed the editor buffer so save() can run
+        currentEditingStation = { ...stationFromExcel };
       }
     } catch (err) {
-      console.error("Error fetching station file details:", err);
+      console.error('Error in openStationDetailPage:', err);
       Object.values(detailSections).forEach(
-        section => section.innerHTML = `<p>Error loading details: ${err.message}</p>`
+        sec => sec.innerHTML = `<p>Error loading details: ${err.message}</p>`
       );
       detailSections.overview.innerHTML = '';
       renderOverviewSection(stationFromExcel);
+      currentEditingStation = { ...stationFromExcel };
     }
   }
+
 
   function closeStationDetailPage() {
     stationDetailPage.classList.add('hidden');
@@ -1272,7 +1349,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const section = detailSections.overview;
     section.innerHTML = '';
 
-    // keep an editable copy
+    // Keep an editable copy for this page
     currentEditingStation = JSON.parse(JSON.stringify(stationData));
 
     // ────────────────
@@ -1285,12 +1362,11 @@ document.addEventListener('DOMContentLoaded', () => {
     generalDiv.style.marginBottom = '10px';
     generalDiv.dataset.sectionName = 'General Information';
 
-    // Header + Unlock
+    // Header + Unlock button
     const titleBar = document.createElement('div');
     titleBar.style.display = 'flex';
     titleBar.style.justifyContent = 'space-between';
     titleBar.style.alignItems = 'center';
-
     const title = document.createElement('strong');
     title.textContent = 'General Information';
     titleBar.appendChild(title);
@@ -1298,7 +1374,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let generalUnlocked = false;
     const unlockBtn = document.createElement('button');
     unlockBtn.textContent = '🔒 Unlock Editing';
-    titleBar.appendChild(unlockBtn);
     unlockBtn.addEventListener('click', async () => {
       const pwd = await showPasswordDialog();
       if (pwd === '1234') {
@@ -1314,10 +1389,10 @@ document.addEventListener('DOMContentLoaded', () => {
         alert('Incorrect password.');
       }
     });
-
+    titleBar.appendChild(unlockBtn);
     generalDiv.appendChild(titleBar);
 
-    // helper to add one field row
+    // Helper to add a single field row
     function addGeneralField(labelText, key, value, alwaysOn = false) {
       const row = document.createElement('div');
       row.style.display = 'flex';
@@ -1325,17 +1400,29 @@ document.addEventListener('DOMContentLoaded', () => {
       row.style.alignItems = 'center';
 
       const lbl = document.createElement('label');
-      lbl.textContent = labelText + ':';
+      lbl.textContent = `${labelText}:`;
       lbl.style.flex = '0 0 140px';
       lbl.style.fontWeight = '600';
       row.appendChild(lbl);
 
       let fld;
-      if (key === 'Repair Priority') {
+      if (key === 'Status') {
+        // Dropdown for Status
         fld = document.createElement('select');
         fld.dataset.key = key;
         fld.disabled = !(alwaysOn || generalUnlocked);
-        // options
+        ['Active', 'Inactive', 'Mothballed', 'Unknown'].forEach(optVal => {
+          const opt = document.createElement('option');
+          opt.value = optVal;
+          opt.textContent = optVal;
+          fld.appendChild(opt);
+        });
+        fld.value = value || 'Unknown';
+      } else if (key === 'Repair Priority') {
+        // Existing dropdown for Repair Priority
+        fld = document.createElement('select');
+        fld.dataset.key = key;
+        fld.disabled = !(alwaysOn || generalUnlocked);
         ['',1,2,3,4,5].forEach(v => {
           const o = document.createElement('option');
           o.value = String(v);
@@ -1344,6 +1431,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         fld.value = String(value || '');
       } else {
+        // Text input for everything else
         fld = document.createElement('input');
         fld.type = 'text';
         fld.dataset.key = key;
@@ -1360,27 +1448,24 @@ document.addEventListener('DOMContentLoaded', () => {
       generalDiv.appendChild(row);
     }
 
-    // insert the core fields
-    addGeneralField('Station ID','Station ID', stationData.stationId);
-    addGeneralField('Category','Category', stationData.category);
-    addGeneralField('Site Name','Site Name', stationData['Site Name']);
-    addGeneralField('Province','Province', stationData.Province || stationData['General Information – Province']);
-    addGeneralField('Latitude','Latitude', stationData.Latitude);
-    addGeneralField('Longitude','Longitude', stationData.Longitude);
-    addGeneralField('Status','Status', stationData.Status, true);
-    addGeneralField('Repair Priority','Repair Priority', stationData['Repair Priority'], true);
+    // Insert core fields
+    addGeneralField('Station ID',     'Station ID',        stationData.stationId);
+    addGeneralField('Category',       'Category',          stationData.category);
+    addGeneralField('Site Name',      'Site Name',         stationData['Site Name']);
+    addGeneralField('Province',       'Province',          stationData.Province || stationData['General Information – Province']);
+    addGeneralField('Latitude',       'Latitude',          stationData.Latitude);
+    addGeneralField('Longitude',      'Longitude',         stationData.Longitude);
+    addGeneralField('Status',         'Status',            stationData.Status,           true);
+    addGeneralField('Repair Priority','Repair Priority',   stationData['Repair Priority'], true);
 
     section.appendChild(generalDiv);
-
 
     // ────────────────
     // 2) DYNAMIC SECTIONS
     // ────────────────
-    // build the sectionsMap from your existing helper
     const sameType = allStationData.filter(s => s.category === stationData.category);
     const sectionsMap = buildSectionsMapFromExcelHeadersAndData(sameType, currentEditingStation);
 
-    // + Add Section
     const addSecBtn = document.createElement('button');
     addSecBtn.textContent = '+ Add Section';
     addSecBtn.style.margin = '10px 0';
@@ -1390,13 +1475,13 @@ document.addEventListener('DOMContentLoaded', () => {
     dynContainer.id = 'quickSectionsContainer';
     section.appendChild(dynContainer);
 
-    // render each existing section
+    // Render existing extra sections
     Object.entries(sectionsMap).forEach(([secName, entries]) => {
       const block = createQuickSectionBlock(secName, entries);
       dynContainer.appendChild(block);
     });
 
-    // wire up +Add Section
+    // Wire up "+ Add Section"
     addSecBtn.addEventListener('click', async () => {
       const newName = await showSectionNameDialog('');
       if (!newName) return;
@@ -1408,13 +1493,13 @@ document.addEventListener('DOMContentLoaded', () => {
       dynContainer.appendChild(block);
     });
 
-
     // ────────────────
     // 3) SAVE CHANGES
     // ────────────────
     const saveBtn = document.createElement('button');
     saveBtn.textContent = 'Save Changes';
     saveBtn.style.marginTop = '12px';
+    saveBtn.id = 'saveChangesBtn';
     saveBtn.onclick = handleSaveChanges;
     section.appendChild(saveBtn);
 
@@ -1423,6 +1508,7 @@ document.addEventListener('DOMContentLoaded', () => {
     msgDiv.style.marginTop = '8px';
     section.appendChild(msgDiv);
   }
+
 
 
   function renderFileListSection(sectionElement, files, emptyMessage) {
