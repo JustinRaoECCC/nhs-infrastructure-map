@@ -45,7 +45,6 @@ This tool empowers teams to maintain up-to-date infrastructure inventories, opti
 * **Add Infrastructure Modal**: Step-by-step wizard to add new stations, sections, and custom fields.
 * **Bulk Excel Import**: Seamlessly import entire sheets, preserving custom sections.
 * **Color Persistence**: Custom filter colors saved in Excel for consistency across sessions.
-* **Secret Easter Egg**: Hidden Pong game for a fun break.
 * **Data Nuke**: Triple-click button to delete all `.xlsx` data files (use with caution!).
 
 ---
@@ -54,7 +53,6 @@ This tool empowers teams to maintain up-to-date infrastructure inventories, opti
 
 * **Node.js** ≥ v14.x (includes `npm`)
 * **Git** for cloning the repository
-* **Excel Workbooks**: A `lookups.xlsx` file (auto-generated) and per-asset-type `.xlsx` data files in `data/`.
 
 ---
 
@@ -93,8 +91,7 @@ npm start
    * Save; the new station is persisted to the appropriate Excel workbook.
 6. **Bulk Import**: In the modal, choose an Excel file, pick a sheet, and import stations in batch—duplicates are skipped.
 7. **Export PDF**: Use the `Download` button to capture the current window as a PDF snippet.
-8. **Secret Pong**: Find the invisible map marker at lat=59.432838, lng=-146.328343 and click 3 times.
-9. **Nuke Data**: Triple-click the red nuke button (bottom-right), confirm to delete all `.xlsx` files and restart.
+8. **Nuke Data**: Triple-click the red nuke button (bottom-right), confirm to delete all `.xlsx` files and restart.
 
 ---
 
@@ -105,16 +102,20 @@ nhs-infrastructure-map/
 ├── data/                      # Excel workbooks (auto-generated)
 │   ├── lookups.xlsx
 │   ├── <AssetType1>.xlsx
-│   └── <AssetTypeN>.xlsx
+│   ├── <AssetTypeN>.xlsx
+│   └── etc.
+├── node_modules/              # Dependency storage
 ├── src/
 │   ├── main.js                # Electron main process & IPC handlers
 │   ├── renderer.js            # Front-end logic with Leaflet & UI
 │   ├── preload.js             # Secure IPC bridge for renderer
 │   ├── style.css              # Application styles
 │   └── index.html             # Main HTML layout
-├── setup.sh                   # Setup script (dependency install, initial tasks)
+├── .gitignore                 # Files to not push to Github
+├── package-lock.json          # Records the exact dependency tree
 ├── package.json               # NPM scripts & dependencies
-└── README.md                  # (this file)
+├── README.md                  # (this file)
+└── setup.sh                   # Setup script (dependency install, initial tasks)
 ```
 
 ---
@@ -138,73 +139,14 @@ nhs-infrastructure-map/
 * Inactive stations: currently not auto-moved to an `INACTIVE` workbook; requires manual handling.
 * Confirm expected behavior for reactivating stations—should they move back and restore history?
 
-> **System Test**: June 16, 2025 – full workflow validated on Windows 10, macOS Big Sur.
-
 ---
 
 ## 🔮 Roadmap
 
-* **v2.0**
+* **v1.0**
 
-  * Shared network/SharePoint integration for central workbook storage
-  * Real-time socket updates for multi-user live sync
-  * Advanced filtering (date ranges, text search)
-  * Custom map layers (satellite, terrain)
-* **v3.0**
-
-  * User authentication & role-based permissions
-  * KPI dashboard with charts (using Recharts)
-  * Automated alerts for overdue inspections or high-priority repairs
-  * Mobile-friendly companion app
+  * Hello idk what to put here yet
 
 ---
 
 ## 🤝 Contributing
-
-1. Fork this repo and create your feature branch:
-
-   ```bash
-   ```
-
-git checkout -b feature/YourFeatureName
-
-````
-2. Commit your changes:
-   ```bash
-git commit -m "Add awesome feature X"
-````
-
-3. Push to the branch:
-
-   ```bash
-   ```
-
-git push origin feature/YourFeatureName
-
-```
-4. Open a Pull Request.  
-
-Please adhere to the existing code style, write clear commit messages, and add tests where appropriate.
-
----
-
-## 💬 Support & Troubleshooting
-
-- **Logs**: Check the developer console (`View → Toggle Developer Tools`) for errors.
-- **Data Directory**: Ensure `data/` is writable by your user.  
-- **Corrupted Lookup**: On load errors for `lookups.xlsx`, the app will recreate a fresh copy (existing lookups lost).
-- **Permissions**: On macOS, grant file access permissions for inspector features.
-- **Community**: Open issues for bug reports, feature requests, or general questions.
-
----
-
-## 📜 License
-
-Distributed under the [MIT License](LICENSE).  
-See `LICENSE` for details.
-
----
-
-*Happy mapping and maintaining!*
-
-```
