@@ -49,12 +49,14 @@ Overall system
 - Randomly doesn't let me type, and the only fix is to rerun the app or wait some time
 
 Editing/saving
+- Deleting doesnt show up right away, you need to reload the program
+
+- Creating a new instance that has a new section/field: that new section/field will only appear in the excel for the specific province for that instance, but every other tab for the excel (other provinces) wont have the info saved. BUT, the information is still properly displayed on the app
+
 - Editing the category doesn't do anything. Maybe we want it to fully copy into a new excel sheet idk
-- Deleting doesn't work when I have multiple instances of the asset type, not sure why because this used to work fine.
+
 - When you try to change the Province of a station, if the excel doesn't have that province tab, it will say "Worksheet "_____" not found in cableway.xlsx" when it SHOULD automatically create the page. And if the excel DOES have the province tab, it will say "Station ID _____ not found." when it should be just putting the row in the differnet excel page.
 
-Excel Bugs
-- The other sections beyond General Information are not being copied to every excel, BUT they are stll being updated on the application, but not the deleting thing as I mentioned previously
 
 
 TODO (need to ask Khodi)
