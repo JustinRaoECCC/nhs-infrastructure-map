@@ -1228,74 +1228,103 @@ document.addEventListener('DOMContentLoaded', async () => {
   async function handleSaveChanges() {
     if (!currentEditingStation) return;
 
-    // 1) Grab the current Save button & message div
+    // 1️⃣ Prevent duplicate Station IDs globally
+    const newId = String(currentEditingStation['Station ID'] || '').trim();
+    if (!newId) {
+      alert('Station ID cannot be empty.');
+      return;
+    }
+
+    // Fetch the freshest list of all stations
+    let allRemote;
+    try {
+      allRemote = await window.electronAPI.getStationData();
+    } catch (err) {
+      console.error('Error fetching station data for duplicate check:', err);
+      allRemote = allStationData; // fallback
+    }
+
+    // Check for conflict (exclude the one we’re editing)
+    const conflict = allRemote.some(s =>
+      String(s.stationId).trim() === newId &&
+      String(s.stationId).trim() !== String(originalEditingStationId).trim()
+    );
+    if (conflict) {
+      alert(`Station ID "${newId}" already exists. Please choose a unique ID.`);
+      return;
+    }
+
+    // 2️⃣ Grab Save button & message div
     let saveBtn = document.getElementById('saveChangesBtn');
     let msgDiv  = document.getElementById('saveMessage');
 
-    // 2) Show “Saving…” and disable button
+    // 3️⃣ Show “Saving…” and disable button
     msgDiv.textContent = 'Saving…';
     if (saveBtn) saveBtn.disabled = true;
 
     try {
-      // 3) Persist changes to Excel
+      // 4️⃣ Persist changes to Excel
       const result = await window.electronAPI.saveStationData(currentEditingStation);
 
       if (result.success) {
-        // 4) Update your in-memory allStationData
+        // 5️⃣ Update in-memory allStationData
         let idx = allStationData.findIndex(
-          s => s.stationId === originalEditingStationId
-              && s.category  === currentEditingStation.category
+          s => s.stationId === originalEditingStationId &&
+              s.category  === currentEditingStation.category
         );
         if (idx === -1) {
-          idx = allStationData.findIndex(s => s.stationId === originalEditingStationId);
+          idx = allStationData.findIndex(
+            s => s.stationId === originalEditingStationId
+          );
         }
         if (idx !== -1) {
           allStationData[idx] = JSON.parse(JSON.stringify(currentEditingStation));
+          const rec = allStationData[idx];
 
           // Sync numeric coords
-          const rec    = allStationData[idx];
           const newLat = parseFloat(currentEditingStation.Latitude);
           const newLon = parseFloat(currentEditingStation.Longitude);
           if (!isNaN(newLat)) rec.latitude = newLat;
           if (!isNaN(newLon)) rec.longitude = newLon;
 
-          // Sync ID & Site Name
-          const newId   = currentEditingStation['Station ID'];
-          const newName = currentEditingStation['Site Name'];
-          if (newId)   rec.stationId   = newId;
-          if (newName) rec.stationName = newName;
+          // Sync ID & Site Name in record
+          rec.stationId   = currentEditingStation['Station ID'];
+          rec.stationName = currentEditingStation['Site Name'];
 
           // Update tracker
-          originalEditingStationId = currentEditingStation.stationId;
+          originalEditingStationId = currentEditingStation['Station ID'];
         }
 
-        // 5) Sync the detail-page model
+        // 6️⃣ Sync detail-page model
         if (currentStationDetailData) {
           currentStationDetailData.overview = JSON.parse(
             JSON.stringify(currentEditingStation)
           );
         }
 
-        // 6) Redraw map or list
-        updateActiveViewDisplay();
-
-        // 7) If Overview tab is active, re-render it (this recreates the Save UI)
-        const overviewBtn = document.querySelector(
-          '.detail-nav-btn[data-section="overview"]'
-        );
-        if (overviewBtn && overviewBtn.classList.contains('active')) {
-          renderOverviewSection(currentEditingStation);
+        // 7️⃣ Reflect a changed Category immediately
+        if (currentEditingStation['Category']) {
+          currentEditingStation.category = currentEditingStation['Category'];
         }
 
-        // 8) Update the page title
+        // 8️⃣ Reflect a changed Station ID immediately
+        currentEditingStation.stationId = currentEditingStation['Station ID'];
+        currentEditingStation.stationName = currentEditingStation['Site Name'];
+
+        // 9️⃣ Fully reload all station data & UI
+        await loadDataAndInitialize();
+
+        // 🔟 Redisplay Overview panel with updated data
+        setActiveDetailSection('overview');
+        renderOverviewSection(currentEditingStation);
+
+        // 1️⃣1️⃣ Update page title
         stationDetailTitle.textContent =
           `${currentEditingStation.stationName} (${currentEditingStation.stationId})`;
 
-        // 9) **Re-query** the freshly rendered Save button & message div
+        // 1️⃣2️⃣ Show “Saved!”
         saveBtn = document.getElementById('saveChangesBtn');
         msgDiv  = document.getElementById('saveMessage');
-
-        // 10) Show “Saved!” permanently (until next click or navigation away)
         msgDiv.textContent = 'Saved!';
       } else {
         // On API failure
@@ -1305,11 +1334,15 @@ document.addEventListener('DOMContentLoaded', async () => {
       console.error('Error saving station:', err);
       msgDiv.textContent = `Error: ${err.message}`;
     } finally {
-      // 11) Re-query & re-enable the button
+      // 1️⃣3️⃣ Re-enable the button
       saveBtn = document.getElementById('saveChangesBtn');
       if (saveBtn) saveBtn.disabled = false;
     }
   }
+
+
+
+
 
 
 
@@ -1371,6 +1404,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     mainViewWrapper.classList.remove('hidden');
     // Unhide Add Infrastructure button
     document.getElementById('btnAddInfra').classList.remove('hidden');
+
+    // Reset the RHS quick-view panel
+    currentEditingStation = null;
+    detailsPanelContent.innerHTML = '<p>Click a station or hover in list.</p>';
+
     currentStationDetailData = null;
     if (!isListViewActive && mapContainer && !mapContainer.classList.contains('hidden')) {
       map.invalidateSize();

@@ -47,15 +47,10 @@ June 16th, 2025 full system test
 
 Overall system
 - Randomly doesn't let me type, and the only fix is to rerun the app or wait some time
+    - for some reason this is fixed by clicking off screen and clicking back on screen
 
-Editing/saving
-- Deleting doesnt show up right away, you need to reload the program
-
-- Creating a new instance that has a new section/field: that new section/field will only appear in the excel for the specific province for that instance, but every other tab for the excel (other provinces) wont have the info saved. BUT, the information is still properly displayed on the app
-
-- Editing the category doesn't do anything. Maybe we want it to fully copy into a new excel sheet idk
-
-- When you try to change the Province of a station, if the excel doesn't have that province tab, it will say "Worksheet "_____" not found in cableway.xlsx" when it SHOULD automatically create the page. And if the excel DOES have the province tab, it will say "Station ID _____ not found." when it should be just putting the row in the differnet excel page.
+TODO
+- From the excel insert button, any provinces that are identified should be auto added to the lookup file just like how the assettypes and categories do
 
 
 
