@@ -14,8 +14,13 @@ const path = require('path');
 const ExcelJS = require('exceljs');
 
 // ─── Paths ───────────────────────────────────────────────────────────────────
-const DATA_DIR      = path.join(__dirname, 'data');
-const LOOKUPS_PATH  = path.join(DATA_DIR, 'lookups.xlsx');
+const DATA_DIR     = path.join(__dirname, '..', 'data');
+const LOOKUPS_PATH = path.join(DATA_DIR, 'lookups.xlsx');
+
+// Make sure the folder exists:
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+}
 
 
 // simple in-memory lock map
@@ -1063,7 +1068,8 @@ ipcMain.handle('save-color', async (_e, category, province, color) => {
 
 
 ipcMain.on('open-pong', () => {
-  const games = ['data/pong.html'];
+  const gameFile = path.join(DATA_DIR, 'pong.html');
+  const games = [ gameFile ];
   const chosen = games[Math.floor(Math.random() * games.length)];
   const pongWin = new BrowserWindow({
     width: 1200, height: 800, title: 'Secret Game',
@@ -1073,7 +1079,7 @@ ipcMain.on('open-pong', () => {
       nodeIntegration: false
     }
   });
-  pongWin.loadFile(path.join(__dirname, chosen));
+  pongWin.loadFile(chosen);
 });
 
 // ─── Electron Window Setup ──────────────────────────────────────────────────
@@ -1087,7 +1093,8 @@ function createWindow() {
       nodeIntegration: false
     }
   });
-  mainWindow.loadFile('index.html');
+  const indexPath = path.join(__dirname, 'index.html');
+  mainWindow.loadFile(indexPath);
   mainWindow.maximize();
 }
 
