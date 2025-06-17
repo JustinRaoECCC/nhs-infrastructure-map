@@ -542,6 +542,9 @@ ipcMain.handle('save-station-data', async (_event, updatedStation) => {
     ).trim();
     if (!newProv) return { success: false, message: 'No province specified.' };
 
+    // Add new province to lookups
+    await appendToLookup('Locations', newProv);
+
     // 2️⃣ Remove row from old category workbook (if exists)
     if (oldAt) {
       const oldPath = path.join(DATA_DIR, `${oldAt}.xlsx`);

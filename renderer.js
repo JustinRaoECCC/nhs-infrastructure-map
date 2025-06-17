@@ -167,6 +167,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
 
+  // Helper
+  function showToast(msg, duration=2000) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.remove('hidden');
+    setTimeout(() => t.classList.add('hidden'), duration);
+  }
+
+
 
   /**
    * Utility: group station‐data keys into “sections” by looking for “SectionName – FieldName”
@@ -969,7 +978,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const oldName = sectionDiv.dataset.sectionName;
       const newName = e.target.value.trim();
       if (!newName) {
-        alert('Section name cannot be empty.');
+        showToast('Section name cannot be empty.');
         titleInput.value = oldName;
         return;
       }
@@ -1039,7 +1048,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const oldKey = entry.fullKey;
         const newFieldName = e.target.value.trim();
         if (!newFieldName) {
-          alert('Field name cannot be empty.');
+          showToast('Field name cannot be empty.');
           keyInput.value = entry.fieldName;
           return;
         }
@@ -1132,7 +1141,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       keyInput.addEventListener('change', e => {
         const newFieldName = e.target.value.trim();
         if (!newFieldName) {
-          alert('Field name cannot be empty.');
+          showToast('Field name cannot be empty.');
           keyInput.value = '';
           return;
         }
@@ -1147,7 +1156,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       // When user types a value, save it under that new key
       valInput.addEventListener('change', e => {
         if (!entry.fieldName) {
-          alert('Please set a field name first.');
+          showToast('Please set a field name first.');
           valInput.value = '';
           return;
         }
@@ -1231,7 +1240,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 1️⃣ Prevent duplicate Station IDs globally
     const newId = String(currentEditingStation['Station ID'] || '').trim();
     if (!newId) {
-      alert('Station ID cannot be empty.');
+      showToast('Station ID cannot be empty.');
       return;
     }
 
@@ -1250,7 +1259,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       String(s.stationId).trim() !== String(originalEditingStationId).trim()
     );
     if (conflict) {
-      alert(`Station ID "${newId}" already exists. Please choose a unique ID.`);
+      showToast(`Station ID "${newId}" already exists. Please choose a unique ID.`);
       return;
     }
 
@@ -1314,6 +1323,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         // 9️⃣ Fully reload all station data & UI
         await loadDataAndInitialize();
 
+        // ─── Make sure the modal’s selects include any new province/category
+        await loadLookups();
+        await loadExistingStationIDs();
+
         // 🔟 Redisplay Overview panel with updated data
         setActiveDetailSection('overview');
         renderOverviewSection(currentEditingStation);
@@ -1339,13 +1352,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (saveBtn) saveBtn.disabled = false;
     }
   }
-
-
-
-
-
-
-
 
   // ────────────────────────────────────────────────────────────────────────────
   // 14) “Full” station detail page (on click), with tabbed sections
@@ -1476,7 +1482,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
           });
       } else if (pwd !== null) {
-        alert('Incorrect password.');
+        showToast('Incorrect password.');
       }
     });
     titleBar.appendChild(unlockBtn);
@@ -1576,7 +1582,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const newName = await showSectionNameDialog('');
       if (!newName) return;
       if (dynContainer.querySelector(`[data-section-name="${newName}"]`)) {
-        alert('Section already exists.');
+        showToast('Section already exists.');
         return;
       }
       const block = createQuickSectionBlock(newName, []);
@@ -1769,12 +1775,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       const { success, message } = await window.electronAPI.downloadWindowAsPDF();
       if (success) {
-        alert(`✅ Saved PDF to:\n${message}`);
+        showToast(`✅ Saved PDF to:\n${message}`);
       } else if (message !== 'Save cancelled.') {
-        alert(`⚠️ ${message}`);
+        showToast(`⚠️ ${message}`);
       }
     } catch (err) {
-      alert(`❌ Error: ${err.message}`);
+      showToast(`❌ Error: ${err.message}`);
     } finally {
       btn.textContent = oldText;
       btn.disabled = false;
@@ -1888,17 +1894,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   btnSaveGeneralInfo.addEventListener('click', () => {
     const stnId = inputStationId.value.trim();
     if (!stnId) {
-      alert('Station ID cannot be empty.');
+      showToast('Station ID cannot be empty.');
       return;
     }
     if (existingStationIDs.has(stnId)) {
-      alert(`Station ID "${stnId}" already exists. Choose a different ID.`);
+      showToast(`Station ID "${stnId}" already exists. Choose a different ID.`);
       return;
     }
     const lat = parseFloat(inputLatitude.value);
     const lon = parseFloat(inputLongitude.value);
     if (isNaN(lat) || isNaN(lon)) {
-      alert('Latitude and Longitude must be valid numbers.');
+      showToast('Latitude and Longitude must be valid numbers.');
       return;
     }
     extraSectionsContainer.style.display = 'block';
@@ -1921,7 +1927,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       selectLocation.dispatchEvent(new Event('change'));
       maybeShowGeneralForm();
     } else {
-      alert('Error saving new location: ' + res.message);
+      showToast('Error saving new location: ' + res.message);
     }
   });
 
@@ -1937,7 +1943,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       selectAssetType.value = newAT;
       maybeShowGeneralForm();
     } else {
-      alert('Error saving new asset type: ' + res.message);
+      showToast('Error saving new asset type: ' + res.message);
     }
   });
   // ────────────────────────────────────────────────────────────────────────────
@@ -2107,7 +2113,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       const res = await window.electronAPI.createNewStation(stationObject);
       if (res.success) {
-        alert('Infrastructure created successfully!');
+        showToast('Infrastructure created successfully!');
         closeModal();
 
         // Reload everything
@@ -2180,10 +2186,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.electronAPI.deleteAllDataFiles()
           .then(res => {
             if (res.success) {
-              alert('✅ All .xlsx files deleted.');
+              showToast('✅ All .xlsx files deleted.');
               loadDataAndInitialize();
             }
-            else alert('❌ Error: ' + res.message);
+            else showToast('❌ Error: ' + res.message);
           });
       }
     }
@@ -2211,7 +2217,7 @@ btnChooseExcel.addEventListener('click', async () => {
       sheetSelectContainer.style.display = 'block';
       btnImportSheet.disabled = false;
     } else {
-      alert('Could not read workbook: ' + sheetsRes.message);
+      showToast('Could not read workbook: ' + sheetsRes.message);
     }
   }
 });
@@ -2240,6 +2246,11 @@ btnImportSheet.addEventListener('click', async () => {
       `✅ Imported ${res.imported} station(s). ` +
       (res.duplicates.length ? `${res.duplicates.length} duplicate ID(s) skipped.` : '');
     await loadDataAndInitialize();     // refresh map/list
+
+    // ─── Refresh the Location & Asset-Type dropdowns at once
+    await loadLookups();
+    await loadExistingStationIDs();
+
   } else {
     importSummary.style.color = '#cc0000';
     importSummary.textContent = '❌ ' + res.message;

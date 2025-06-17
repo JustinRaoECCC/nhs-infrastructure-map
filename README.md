@@ -33,8 +33,6 @@ npm start
 
 ## 🪲 Current Bugs/TODO list
 
-- For some reason created a new column when province (and maybe others) was edited for cableway BC
-- For some reason cannot edit the province for weir (and maybe others)
 - A section without a field cannot be edited
 
 - Turn into an actual desktop application where the site xlsx documents are saved to a network/sharepoint
@@ -42,16 +40,6 @@ npm start
 
 
 June 16th, 2025 full system test
-
-
-
-Overall system
-- Randomly doesn't let me type, and the only fix is to rerun the app or wait some time
-    - for some reason this is fixed by clicking off screen and clicking back on screen
-
-TODO
-- From the excel insert button, any provinces that are identified should be auto added to the lookup file just like how the assettypes and categories do
-
 
 
 TODO (need to ask Khodi)
