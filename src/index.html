@@ -56,7 +56,7 @@
         <div id="repairsViewControls" style="display:none; align-items:center; margin-left:10px;">
           <label for="repairsSortSelect" style="margin-right:4px;">Sort by:</label>
           <select id="repairsSortSelect">
-            <option value="repairPriority">Repair Priority</option>
+            <option value="repairRanking">Repair Ranking</option>
             <option value="repairCost">Repair Cost</option>
             <option value="frequency">Frequency</option>
             <option value="location">Location</option>
@@ -116,7 +116,7 @@
                 <th>Latitude</th>
                 <th>Longitude</th>
                 <th>Status</th>
-                <th>Repair Priority</th>
+                <th>Repair Ranking</th>
                 <th>Repair Cost</th>
                 <th>Frequency</th>
               </tr>
@@ -208,9 +208,9 @@
         <label for="inputStatus">Status</label>
         <input type="text" id="inputStatus" placeholder="e.g. ACTIVE" />
 
-        <label for="selectRepairPriority">Repair Priority</label>
-        <select id="selectRepairPriority">
-          <option value="">-- Select priority --</option>
+        <label for="selectRepairRanking">Repair Ranking</label>
+        <select id="selectRepairRanking">
+          <option value="">-- Select Ranking --</option>
           <option value="1">1</option>
           <option value="2">2</option>
           <option value="3">3</option>

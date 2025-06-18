@@ -134,7 +134,8 @@ nhs-infrastructure-map/
 
 ## Current Bugs / TODO List
 
-* Switch what is currently Repair Priority to Repair Ranking
+* Make the Priority View instantly update after editing a priority ranking
+
 * Impliment Repair Ranking, Repair Cost, Frequency (like where do they pull that data from) --> On the High Priority Repairs page it can be edited and also probably on the Add Infrastructure page
 * Impliment the calculation for determining what should be the order of repairs (Sort by: Repair Priority) -->  Out of 100, it's somthing like x times 0.3 + y times 0.5 + z times 0.2
 

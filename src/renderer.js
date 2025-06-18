@@ -83,7 +83,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   let isRepairsViewActive      = false;
   let previousView             = 'map';               // track where to return
-  let currentRepairsSortOption = 'repairPriority';   // default sort
+  let currentRepairsSortOption = 'repairRanking';   // default sort
 
   let isPriorityMapActive      = false;
 
@@ -520,7 +520,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       // Choose color by priority or by asset‐type
       const color = isPriorityMapActive
-        ? (PRIORITY_COLORS[String(st['Repair Priority'])] || 'grey')
+        ? (PRIORITY_COLORS[String(st['Repair Ranking'])] || 'grey')
         : getComboColor(st.category, provinceOf(st));
 
       // Create a marker
@@ -644,10 +644,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 2) Sort based on the current repairs‐view sort option
     switch (currentRepairsSortOption) {
-      case 'repairPriority':
+      case 'repairRanking':
         arr.sort((a, b) => {
-          const pa = parseInt(a['Repair Priority'], 10) || 0;
-          const pb = parseInt(b['Repair Priority'], 10) || 0;
+          const pa = parseInt(a['Repair Ranking'], 10) || 0;
+          const pb = parseInt(b['Repair Ranking'], 10) || 0;
           return pa - pb;
         });
         break;
@@ -677,7 +677,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 3) Decide if we need grouping headers
     const useGrouping =
       currentRepairsSortOption === 'location' ||
-      currentRepairsSortOption === 'repairPriority';
+      currentRepairsSortOption === 'repairRanking';
 
     let lastGroupKey = null;
 
@@ -687,8 +687,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       if (currentRepairsSortOption === 'location') {
         groupKey = provinceOf(station);
-      } else if (currentRepairsSortOption === 'repairPriority') {
-        groupKey = station['Repair Priority'] || 'None';
+      } else if (currentRepairsSortOption === 'repairRanking') {
+        groupKey = station['Repair Ranking'] || 'None';
       }
 
       // Emit a group‐header row if needed
@@ -697,7 +697,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         headerRow.className =
           currentRepairsSortOption === 'location'
             ? 'province-group-row'
-            : 'repair-priority-group-row';
+            : 'repair-ranking-group-row';
 
         const th = document.createElement('th');
         th.colSpan = 9; // total number of columns in the repairs table
@@ -725,7 +725,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           ? station.longitude.toFixed(5)
           : station.Longitude || '';
       row.insertCell().textContent = station.Status              || '';
-      row.insertCell().textContent = station['Repair Priority'] || '';
+      row.insertCell().textContent = station['Repair Ranking'] || '';
       row.insertCell().textContent = station['Repair Cost']     || '';
       row.insertCell().textContent = station['Frequency']       || '';
 
@@ -756,9 +756,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   // 11) Toggle panels
   // ────────────────────────────────────────────────────────────────────────────
   function updateActiveViewDisplay() {
-    if (isListViewActive) {
+    if (isRepairsViewActive) {
+      updateRepairsViewDisplay();
+    }
+    else if (isListViewActive) {
       updateListViewDisplay();
-    } else {
+    }
+    else {
       updateMapDisplay();
     }
   }
@@ -889,7 +893,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       let field;
       if (isSelect) {
-        // for Repair Priority, Status, etc, you can decide if you want a select or just text
+        // for Repair Ranking, Status, etc, you can decide if you want a select or just text
         field = document.createElement('input');
         field.type = 'text';
         field.value = value;
@@ -913,7 +917,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     addReadOnlyField('Latitude',         station.latitude  || station.Latitude);
     addReadOnlyField('Longitude',        station.longitude || station.Longitude);
     addReadOnlyField('Status',           station.Status);
-    addReadOnlyField('Repair Priority',  station['Repair Priority']);
+    addReadOnlyField('Repair Ranking',  station['Repair Ranking']);
 
     detailsPanelContent.appendChild(generalSectionDiv);
 
@@ -1542,7 +1546,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         unlockBtn.disabled = true;
         generalDiv.querySelectorAll('input[data-key], select[data-key]')
           .forEach(el => {
-            if (el.dataset.key !== 'Status' && el.dataset.key !== 'Repair Priority') {
+            if (el.dataset.key !== 'Status' && el.dataset.key !== 'Repair Ranking') {
               el.disabled = false;
             }
           });
@@ -1579,8 +1583,8 @@ document.addEventListener('DOMContentLoaded', async () => {
           fld.appendChild(opt);
         });
         fld.value = normalizeStatus(value);
-      } else if (key === 'Repair Priority') {
-        // Existing dropdown for Repair Priority
+      } else if (key === 'Repair Ranking') {
+        // Existing dropdown for Repair Ranking
         fld = document.createElement('select');
         fld.dataset.key = key;
         fld.disabled = !(alwaysOn || generalUnlocked);
@@ -1617,7 +1621,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     addGeneralField('Latitude',       'Latitude',          stationData.Latitude);
     addGeneralField('Longitude',      'Longitude',         stationData.Longitude);
     addGeneralField('Status',         'Status',            stationData.Status,           true);
-    addGeneralField('Repair Priority','Repair Priority',   stationData['Repair Priority'], true);
+    addGeneralField('Repair Ranking','Repair Ranking', stationData['Repair Ranking'], true);
 
     section.appendChild(generalDiv);
 
@@ -1871,7 +1875,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const inputStationId         = document.getElementById('inputStationId');
   const inputSiteName          = document.getElementById('inputSiteName');
   const inputStatus            = document.getElementById('inputStatus');
-  const selectRepairPriority = document.getElementById('selectRepairPriority');
+  const selectRepairRanking  = document.getElementById('selectRepairRanking');
   const inputLatitude          = document.getElementById('inputLatitude');
   const inputLongitude         = document.getElementById('inputLongitude');
   const btnSaveGeneralInfo     = document.getElementById('btnSaveGeneralInfo');
@@ -2149,11 +2153,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     createStationMessage.textContent = '';
     const location  = selectLocation.value.trim();
     const assetType = selectAssetType.value.trim();
-    const priority = selectRepairPriority.value.trim();
     const stationId = inputStationId.value.trim();
     const siteName  = inputSiteName.value.trim();
     const status    = inputStatus.value.trim() || 'UNKNOWN';
-    const repairPriority = selectRepairPriority.value.trim() || '';
+    const repairRanking  = selectRepairRanking.value.trim()  || '';
     const latitude  = parseFloat(inputLatitude.value);
     const longitude = parseFloat(inputLongitude.value);
 
@@ -2192,7 +2195,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const stationObject = {
       location,
       assetType,
-      generalInfo: { stationId, siteName, province: location, latitude, longitude, status, repairPriority },
+      generalInfo: { stationId, siteName, province: location, latitude, longitude, status, repairRanking },
       extraSections: allSections
     };
 

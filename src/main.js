@@ -1,10 +1,16 @@
 // main.js
+
 // ─────────────────────────────────────────────────────────────────────────────
-//
 // Main (Electron) process: window setup, IPC handlers for lookups and per-asset-type data files.
-//
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** 
+ * Bring in all the models needed
+ *    - Electron's core APIs (app, BroswerWindow, ipcMain, dialog, shell, clipboard, nativeImage)
+ *    - Node's filesystem and child-proccess helpers
+ *    - Path utilities
+ *    - Exceljs for reading from and writing to .xlsx files
+ */
 const { app, BrowserWindow, ipcMain, dialog, shell, clipboard, nativeImage } = require('electron');
 const { exec } = require('child_process');
 const fs = require('fs');
@@ -12,18 +18,28 @@ const fsPromises = require('fs').promises;
 const fsSync = require('fs');
 const path = require('path');
 const ExcelJS = require('exceljs');
+// Used for identifying which imported stations are in what province
+const { point, booleanPointInPolygon } = require('@turf/turf');
 
-// ─── Paths ───────────────────────────────────────────────────────────────────
-const DATA_DIR     = path.join(__dirname, '..', 'data');
+
+/** 
+ * Define the locations/paths where the data infrastructure informaton be stored
+ *    .. because main.js is within src, which is on the same level in the project directory as data
+*/
+const DATA_DIR = path.join(__dirname, '..', 'data');
 const LOOKUPS_PATH = path.join(DATA_DIR, 'lookups.xlsx');
 
-// Make sure the folder exists:
+/** Helper to ensure the data folder exists
+ */
 if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
 
-// simple in-memory lock map
+/** 
+ * Asset-Type Locking (Prevents concurrent writes to the same asset-type xlsx file)
+ *    - All operations for a specific asset-type will queue up
+ */
 const assetTypeLocks = new Map();
 function withAssetTypeLock(assetType, fn) {
   const prev = assetTypeLocks.get(assetType) || Promise.resolve();
@@ -32,18 +48,9 @@ function withAssetTypeLock(assetType, fn) {
   return next;
 }
 
-
-
-// Ensure data directory exists
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-}
-
-
-// CommonJS style—no import/ESM syntax here:
-const { point, booleanPointInPolygon } = require('@turf/turf');
-
-// Your province loader & inferrer exactly as before:
+/** 
+ * List of the provinces used in this program
+ */
 const PROVINCES = [
   { code: 'BC', name: 'British Columbia' },
   { code: 'AB', name: 'Alberta' },
@@ -53,6 +60,9 @@ const PROVINCES = [
 ];
 const provinceGeo = {};
 
+/** 
+ * Fetches the boundary (geojson) from Nominatim for each province
+*/
 async function loadProvinceBoundaries() {
   await Promise.all(
     PROVINCES.map(async ({ code, name }) => {
@@ -72,6 +82,11 @@ async function loadProvinceBoundaries() {
   );
 }
 
+/**
+ * @param lat (the latitude) 
+ * @param lon (the longitude)
+ * @returns the first province whose polygon contains [lon,lat]
+ */
 function inferProvinceByCoordinates(lat, lon) {
   const pt = point([lon, lat]);
   for (const { code } of PROVINCES) {
@@ -83,46 +98,46 @@ function inferProvinceByCoordinates(lat, lon) {
   return '';
 }
 
+/** 
+ * Pre-load province data
+*/
 app.whenReady().then(async () => {
   await loadProvinceBoundaries();
-  // create your BrowserWindow, etc.
-  console.log(inferProvinceByCoordinates(53.5, -128.6)); // → "BC"
+ // console.log(inferProvinceByCoordinates(53.5, -128.6)); // → "BC" centering
 });
+
 
 
 
 // ─── Lookup Workbook Helpers ─────────────────────────────────────────────────
 
+
 /**
- * loadLookupWorkbook():
- *   - Creates lookups.xlsx if missing, then reads it.
+ * Creates lookups.xlsx if missing, then reads it.
  */
 async function loadLookupWorkbook() {
   const wb = new ExcelJS.Workbook();
   const exists = fs.existsSync(LOOKUPS_PATH);
 
+  // First time: create a brand-new file
   if (!exists) {
-    // First time: create a brand-new file
     await wb.xlsx.writeFile(LOOKUPS_PATH);
   }
 
   try {
-    // Try reading it
     await wb.xlsx.readFile(LOOKUPS_PATH);
   } catch (err) {
     console.warn('⚠️ lookups.xlsx is corrupted; recreating fresh copy.', err);
-    // Overwrite with a clean workbook
+    // Overwrite with a clean workbook if corrupted
     await wb.xlsx.writeFile(LOOKUPS_PATH);
-    // Read it again (now it’s an empty workbook)
     await wb.xlsx.readFile(LOOKUPS_PATH);
   }
-
   return wb;
 }
 
 /**
- * readLookupList(sheetName):
- *   - Reads “Locations” or “AssetTypes” from lookups.xlsx.
+ * Reads “Locations” or “AssetTypes” from lookups.xlsx
+ *    - Used for the "Add Infrastructure" button
  */
 async function readLookupList(sheetName) {
   const wb = await loadLookupWorkbook();
@@ -145,8 +160,8 @@ async function readLookupList(sheetName) {
 }
 
 /**
- * appendToLookup(sheetName, entryValue):
- *   - Appends a new Location or AssetType if not already there.
+ * Appends a new Location or AssetType if not already there.
+ *    - The new option will instantly apper in the excel and the dropdown menu inside of "Add Infrastructure"
  */
 async function appendToLookup(sheetName, entryValue) {
   const wb = await loadLookupWorkbook();
@@ -169,9 +184,16 @@ async function appendToLookup(sheetName, entryValue) {
 }
 
 
-// ─────────────────────────────────────────────────────────────
-// Internal helpers so code outside IPC can reuse the same logic
-// ─────────────────────────────────────────────────────────────
+/**
+ * Registers a new asset type and creates its workbook if needed
+ *    - Acquires a lock so concurrent calls don’t collide
+ *    - Appends to the “AssetTypes” lookup (skips if it already exists)
+ *    - Builds a new `{DATA_DIR}/{assetType}.xlsx`:
+ *       • One sheet per province from lookups
+ *       • Merged “General Information” title row
+ *       • Core columns on row 2 (Station ID, Asset Type, …, Repair Ranking)
+ *    - Returns `{ success, added }` or an error message
+ */
 async function addNewAssetTypeInternal(newAssetType) {
   return withAssetTypeLock(newAssetType, async () => {
     if (!newAssetType || typeof newAssetType !== 'string') {
@@ -185,11 +207,11 @@ async function addNewAssetTypeInternal(newAssetType) {
 
       // Create workbook identical to the original handler
       const dataPath = path.join(DATA_DIR, `${newAssetType}.xlsx`);
-      const dataWb   = new ExcelJS.Workbook();
+      const dataWb = new ExcelJS.Workbook();
 
-      // get list of provinces already in lookups
+      // Gather all provinces from lookups.xlsx
       const lookupWb = await loadLookupWorkbook();
-      const provSh   = lookupWb.getWorksheet('Locations');
+      const provSh = lookupWb.getWorksheet('Locations');
       const provinces = [];
       provSh.eachRow((row, rn) => {
         const v = row.getCell(1).text;
@@ -199,18 +221,20 @@ async function addNewAssetTypeInternal(newAssetType) {
       const coreCols = [
         'Station ID','Asset Type','Site Name',
         'Province','Latitude','Longitude',
-        'Status','Repair Priority'
+        'Status','Repair Ranking'
       ];
+
+      // Create one worksheet per province with core headers
       for (const p of provinces) {
         const ws = dataWb.addWorksheet(p);
         ws.mergeCells('A1:H1');
         ws.getCell('A1').value = 'General Information';
         ws.getCell('A1').alignment = { horizontal:'center', vertical:'middle' };
-        ws.getCell('A1').font      = { bold:true };
+        ws.getCell('A1').font = { bold:true };
         coreCols.forEach((hdr, i) => {
           const c = ws.getRow(2).getCell(i + 1);
           c.value = hdr;
-          c.font  = { bold:true };
+          c.font = { bold:true };
           c.alignment = { horizontal:'left', vertical:'middle' };
         });
       }
@@ -222,13 +246,20 @@ async function addNewAssetTypeInternal(newAssetType) {
   });
 }
 
-// and export it as a function:
+/**
+ * Inserts a new station into its asset‐type workbook and province sheet.
+ *   - Verifies global uniqueness across all asset-type files.
+ *   - Loads or creates the target workbook and province sheet.
+ *   - Adds any missing “Section – Field” columns to every sheet.
+ *   - Appends the station’s core fields and extra-section values.
+ *   - Returns { success, message }.
+ */
 async function createNewStationInternal(stationObject) {
   try {
-    // 1) Global uniqueness check across all asset-type files
-    const lookupWb     = await loadLookupWorkbook();
-    const assetSh      = lookupWb.getWorksheet('AssetTypes');
-    const assetTypes   = [];
+    // 1) Check uniqueness: scan every asset-type file for duplicates
+    const lookupWb = await loadLookupWorkbook();
+    const assetSh = lookupWb.getWorksheet('AssetTypes');
+    const assetTypes = [];
     assetSh.eachRow((row, rn) => {
       const v = row.getCell(1).text;
       if (rn >= 2 && v && v.trim()) assetTypes.push(v.trim());
@@ -237,15 +268,17 @@ async function createNewStationInternal(stationObject) {
     for (const at of assetTypes) {
       const atPath = path.join(DATA_DIR, `${at}.xlsx`);
       if (!fs.existsSync(atPath)) continue;
-      const wb     = new ExcelJS.Workbook();
+      const wb = new ExcelJS.Workbook();
       await wb.xlsx.readFile(atPath);
       for (const ws of wb.worksheets) {
+        // find the Station ID column
         const headerRow = ws.getRow(2);
         let idCol = -1;
         headerRow.eachCell((cell, idx) => {
           if (cell.value === 'Station ID') idCol = idx;
         });
         if (idCol < 1) continue;
+        // scan rows 3+
         for (let r = 3; r <= ws.rowCount; r++) {
           const val = ws.getRow(r).getCell(idCol).value;
           if (val && String(val).trim() === String(stationObject.generalInfo.stationId).trim()) {
@@ -255,45 +288,45 @@ async function createNewStationInternal(stationObject) {
       }
     }
 
-    // 2) Load workbook for this assetType
+    // 2) Load the workbook for this station’s assetType
     const dataPath = path.join(DATA_DIR, `${stationObject.assetType}.xlsx`);
-    const wb2      = new ExcelJS.Workbook();
+    const wb2 = new ExcelJS.Workbook();
     if (!fs.existsSync(dataPath)) {
       return { success:false, message:`Workbook for asset type "${stationObject.assetType}" was not found.` };
     }
     await wb2.xlsx.readFile(dataPath);
 
-    // 3) Get the province sheet
+   // 3) Ensure the province sheet exists (create if missing)
     const province = stationObject.generalInfo.province;
     let ws = wb2.getWorksheet(province);
     if (!ws) {
-      // Create new worksheet for this province
+      
       ws = wb2.addWorksheet(province);
 
-      // Recreate your two-row header:
-      // Row 1: merged “General Information”
+      // Header row 1: merged title
       ws.mergeCells('A1:H1');
-      ws.getCell('A1').value     = 'General Information';
+      ws.getCell('A1').value = 'General Information';
       ws.getCell('A1').alignment = { horizontal:'center', vertical:'middle' };
-      ws.getCell('A1').font      = { bold:true };
+      ws.getCell('A1').font = { bold:true };
 
-      // Row 2: actual column names
+      // Header row 2: core column names
       const cols = [
         'Station ID','Asset Type','Site Name',
         'Province','Latitude','Longitude',
-        'Status','Repair Priority'
+        'Status','Repair Ranking'
       ];
       cols.forEach((hdr, i) => {
         const cell = ws.getRow(2).getCell(i + 1);
-        cell.value     = hdr;
-        cell.font      = { bold:true };
+        cell.value = hdr;
+        cell.font = { bold:true };
         cell.alignment = { horizontal:'left', vertical:'middle' };
       });
 
-      // save immediately so the new tab persists
+      // persist new sheet/page
       await wb2.xlsx.writeFile(dataPath);
     }
 
+    // 4) Determine any new dynamic columns from extraSections
     const newFullCols = [];
     for (const [secName, fieldsObj] of Object.entries(stationObject.extraSections || {})) {
       for (const fn of Object.keys(fieldsObj)) {
@@ -304,16 +337,18 @@ async function createNewStationInternal(stationObject) {
       }
     }
 
-    // ─── NEW: inject each new column into every worksheet ───────────────────────
+    // 5) Inject each new column into every worksheet
     wb2.worksheets.forEach(sheet => {
       const existing = sheet.getRow(2).values.slice(1).map(v => String(v));
       newFullCols.forEach(colName => {
         if (!existing.includes(colName)) {
           const newIdx = existing.length + 1;
+          // insert blank column
           sheet.spliceColumns(newIdx, 0, []);
           const cell = sheet.getRow(2).getCell(newIdx);
-        cell.value     = colName;
-          cell.font      = { bold:true };
+          // set header
+          cell.value = colName;
+          cell.font = { bold:true };
           cell.alignment = { horizontal:'left', vertical:'middle' };
           existing.push(colName);
         }
@@ -321,9 +356,9 @@ async function createNewStationInternal(stationObject) {
     });
 
 
-    // 4) Build header map from row 2
+    // 6) Build a header→column index map from row 2
     const headerRow2 = ws.getRow(2);
-    const headers    = [];
+    const headers = [];
     headerRow2.eachCell((cell, idx) => {
       headers[idx - 1] = cell.value ? String(cell.value).trim() : null;
     });
@@ -332,7 +367,7 @@ async function createNewStationInternal(stationObject) {
       if (h) headerMap[h] = i + 1;
     });
 
-    // 5) Add any new “Section – Field” columns
+    // 7) Add any new “Section – Field” columns
     for (const [secName, fieldsObj] of Object.entries(stationObject.extraSections || {})) {
       for (const [fn, val] of Object.entries(fieldsObj)) {
         const fullCol = `${secName} - ${fn}`;
@@ -340,7 +375,7 @@ async function createNewStationInternal(stationObject) {
           const lastIdx = headers.length;
           ws.spliceColumns(lastIdx + 1, 0, []);
           ws.getRow(2).getCell(lastIdx + 1).value = fullCol;
-          ws.getRow(2).getCell(lastIdx + 1).font      = { bold: true };
+          ws.getRow(2).getCell(lastIdx + 1).font = { bold: true };
           ws.getRow(2).getCell(lastIdx + 1).alignment = { horizontal:'left', vertical:'middle' };
           headers.push(fullCol);
           headerMap[fullCol] = lastIdx + 1;
@@ -348,23 +383,23 @@ async function createNewStationInternal(stationObject) {
       }
     }
 
-    // 6) Append the new data row
+    // 8) Append the new station row
     const newRowIdx = ws.rowCount + 1;
-    const newRow    = ws.getRow(newRowIdx);
+    const newRow = ws.getRow(newRowIdx);
 
     // Core fields
-    newRow.getCell(headerMap['Station ID']).value      = stationObject.generalInfo.stationId;
-    newRow.getCell(headerMap['Asset Type']).value      = stationObject.assetType;
-    newRow.getCell(headerMap['Site Name']).value       = stationObject.generalInfo.siteName;
-    newRow.getCell(headerMap['Province']).value        = stationObject.generalInfo.province;
-    newRow.getCell(headerMap['Latitude']).value        = Number(stationObject.generalInfo.latitude);
-    newRow.getCell(headerMap['Longitude']).value       = Number(stationObject.generalInfo.longitude);
-    newRow.getCell(headerMap['Status']).value          = stationObject.generalInfo.status;
-    if (headerMap['Repair Priority']) {
-      newRow.getCell(headerMap['Repair Priority']).value = stationObject.generalInfo.repairPriority;
+    newRow.getCell(headerMap['Station ID']).value = stationObject.generalInfo.stationId;
+    newRow.getCell(headerMap['Asset Type']).value = stationObject.assetType;
+    newRow.getCell(headerMap['Site Name']).value = stationObject.generalInfo.siteName;
+    newRow.getCell(headerMap['Province']).value = stationObject.generalInfo.province;
+    newRow.getCell(headerMap['Latitude']).value = Number(stationObject.generalInfo.latitude);
+    newRow.getCell(headerMap['Longitude']).value = Number(stationObject.generalInfo.longitude);
+    newRow.getCell(headerMap['Status']).value = stationObject.generalInfo.status;
+    if (headerMap['Repair Ranking']) {
+      newRow.getCell(headerMap['Repair Ranking']).value = stationObject.generalInfo.repairRanking;
     }
 
-    // Extra sections
+    // Extra section fields
     for (const [secName, fieldsObj] of Object.entries(stationObject.extraSections || {})) {
       for (const [fn, val] of Object.entries(fieldsObj)) {
         const fullCol = `${secName} - ${fn}`;
@@ -373,11 +408,12 @@ async function createNewStationInternal(stationObject) {
         }
       }
     }
-
     newRow.commit();
-    await wb2.xlsx.writeFile(dataPath);
 
+    // 9) Save the updated workbook
+    await wb2.xlsx.writeFile(dataPath);
     return { success: true, message: 'New station created successfully.' };
+
   } catch (err) {
     console.error('create-new-station error:', err);
     return { success: false, message: err.message };
@@ -389,7 +425,12 @@ async function createNewStationInternal(stationObject) {
 
 // ─── IPC: Lookups ────────────────────────────────────────────────────────────
 
-// Get list of locations
+/**
+ * IPC handler: gets all saved locations for the “Add Infrastructure” dropdown
+ *    - Calls readLookupList('Locations')
+ *    - Returns { success: true, data: [...] } on success
+ *    - Catches errors and responds { success: false, message }
+ */
 ipcMain.handle('get-locations', async () => {
   try {
     const data = await readLookupList('Locations');
@@ -400,7 +441,12 @@ ipcMain.handle('get-locations', async () => {
   }
 });
 
-// Get list of asset types
+/**
+ * IPC handler: gets all asset types for the “Add Infrastructure” dropdown
+ *    - Calls readLookupList('AssetTypes')
+ *    - Returns { success: true, data: [...] } on success
+ *    - Logs and returns { success: false, message } on error
+ */
 ipcMain.handle('get-asset-types', async () => {
   try {
     const data = await readLookupList('AssetTypes');
@@ -411,8 +457,15 @@ ipcMain.handle('get-asset-types', async () => {
   }
 });
 
-// Add a new location
+/**
+ * IPC handler: saves a new location to lookups.xlsx
+ *    - Validates input is a nonempty string
+ *    - Calls appendToLookup('Locations', newLocation)
+ *    - Returns { success: true, added: boolean }
+ *    - On error logs and returns { success: false, message }
+ */
 ipcMain.handle('add-new-location', async (event, newLocation) => {
+  // reject invalid inputs
   if (!newLocation || typeof newLocation !== 'string') {
     return { success: false, message: 'Invalid location string.' };
   }
@@ -426,7 +479,9 @@ ipcMain.handle('add-new-location', async (event, newLocation) => {
 });
 
 // Add a new asset type & create its own workbook
-ipcMain.handle('add-new-asset-type',   (e, at)      => addNewAssetTypeInternal(at));
+ipcMain.handle('add-new-asset-type', (e, at) => { 
+  addNewAssetTypeInternal(at);
+});
 
 // ─── IPC: Station CRUD ───────────────────────────────────────────────────────
 
@@ -434,21 +489,27 @@ ipcMain.handle('add-new-asset-type',   (e, at)      => addNewAssetTypeInternal(a
  * Create a new station in its asset-type workbook & province sheet.
  * stationObject = {
  *   location, assetType,
- *   generalInfo: { stationId, siteName, province, latitude, longitude, status, repairPriority },
+ *   generalInfo: { stationId, siteName, province, latitude, longitude, status, repairRanking },
  *   extraSections: { [sectionName]: { [fieldName]: value, … }, … }
  * }
  */
-ipcMain.handle('create-new-station',   (e, station) => createNewStationInternal(station));
-
+ipcMain.handle('create-new-station', (e, station) => {
+  createNewStationInternal(station);
+});
 
 /**
- * get-station-data:
- *   - Reads all asset-type files, all province sheets, and returns combined station list.
+ * IPC handler: retrieves all station records across every asset type and province
+ *    - Reads “AssetTypes” from lookups.xlsx
+ *    - For each asset-type workbook (*.xlsx), loads every sheet
+ *    - Parses the header row (row 2 or fallback to row 1) and data rows
+ *    - Builds station objects only for valid ID/latitude/longitude
+ *    - Returns an array of { stationId, stationName, latitude, longitude, category, Status, …extraFields }
  */
 ipcMain.handle('get-station-data', async () => {
   try {
-    const lookupWb   = await loadLookupWorkbook();
-    const assetSh    = lookupWb.getWorksheet('AssetTypes');
+    // 1) Load asset types from lookups.xlsx
+    const lookupWb = await loadLookupWorkbook();
+    const assetSh = lookupWb.getWorksheet('AssetTypes');
     const assetTypes = [];
     assetSh.eachRow((row, rn) => {
       const v = row.getCell(1).text;
@@ -456,26 +517,29 @@ ipcMain.handle('get-station-data', async () => {
     });
 
     const allStations = [];
+    // 2) Iterate each asset-type workbook
     for (const at of assetTypes) {
       const dataPath = path.join(DATA_DIR, `${at}.xlsx`);
       if (!fs.existsSync(dataPath)) continue;
-      const wb     = new ExcelJS.Workbook();
+      const wb = new ExcelJS.Workbook();
       await wb.xlsx.readFile(dataPath);
+      // 3) For each sheet (province) in the workbook
       for (const ws of wb.worksheets) {
-        // Determine header row (row 2)
+        // Determine header row (prefer row 2, else row 1)
         let headerRow = ws.getRow(2);
         let firstDataRow = 3;
         if (!headerRow.hasValues) {
-          headerRow    = ws.getRow(1);
+          headerRow = ws.getRow(1);
           firstDataRow = 2;
         }
+        // Map column indices → header names
         const headers = [];
         headerRow.eachCell((cell, idx) => {
           headers[idx - 1] = cell.value ? String(cell.value).trim() : null;
         });
-        if (!headers.some(h => h)) continue;
+        if (!headers.some(h => h)) continue; // skip empty sheets
 
-        // Read data rows
+        // 4) Read each data row into an object
         for (let r = firstDataRow; r <= ws.rowCount; r++) {
           const row = ws.getRow(r);
           if (!row.hasValues) continue;
@@ -484,17 +548,22 @@ ipcMain.handle('get-station-data', async () => {
             const key = headers[idx - 1];
             if (!key) return;
             let val = cell.value;
-            if (val === null || val === undefined) val = '';
-            else if (typeof val === 'object' && val.richText) {
+            // normalize richText cells
+            if (val === null || val === undefined) {
+              val = '';
+            } else if (typeof val === 'object' && val.richText) {
               val = val.richText.map(rt => rt.text).join('');
             }
             rowData[key] = val;
           });
-          // Build station object
+
+          // 5) Validate stationId and coordinates
           const sid = String(rowData['Station ID'] || '').trim();
           const lat = parseFloat(rowData['Latitude']);
           const lon = parseFloat(rowData['Longitude']);
           if (!sid || isNaN(lat) || isNaN(lon)) continue;
+
+          // 6) Build and collect the station object
           allStations.push({
             stationId: sid,
             stationName: String(rowData['Site Name'] || '').trim(),
@@ -508,7 +577,9 @@ ipcMain.handle('get-station-data', async () => {
       }
     }
 
+    // 7) Return the compiled list
     return allStations;
+
   } catch (err) {
     console.error('get-station-data error:', err);
     return [];
@@ -516,20 +587,19 @@ ipcMain.handle('get-station-data', async () => {
 });
 
 /**
- * save-station-data:
- *   - Updates an existing station row, handles adding/removing columns
- *     across every province sheet in the asset-type workbook.
+ * IPC handler: updates an existing station record
+ *    - Removes its row from the old category workbook (if changed)
+ *    - Ensures the new category’s workbook & province sheet exist
+ *    - Syncs core + dynamic headers across all sheets
+ *    - Appends the updated station data as a new row
  */
-// ─── save-station-data (overwrites old handler) ────────────────────────────
 ipcMain.handle('save-station-data', async (_event, updatedStation) => {
   try {
-    // 1️⃣ Identify station & categories
+    // 1) Identify station ID, old vs. new category, and new province
     const stationId = String(
       updatedStation.stationId ||
       updatedStation['Station ID']
     ).trim();
-
-    // old category from .category, new from user‐edited "Category"
     const oldAt = String(updatedStation.category || '').trim();
     const newAt = String(
       updatedStation['Category'] ||
@@ -537,8 +607,6 @@ ipcMain.handle('save-station-data', async (_event, updatedStation) => {
       ''
     ).trim();
     if (!newAt) return { success: false, message: 'No category specified.' };
-
-    // new province from whichever field the UI set
     const newProv = String(
       updatedStation['General Information – Province'] ||
       updatedStation.Province ||
@@ -547,25 +615,23 @@ ipcMain.handle('save-station-data', async (_event, updatedStation) => {
     ).trim();
     if (!newProv) return { success: false, message: 'No province specified.' };
 
-    // Add new province to lookups
+    // Add new province to lookup list if needed
     await appendToLookup('Locations', newProv);
 
-    // 2️⃣ Remove row from old category workbook (if exists)
+    // 2) Remove old row from the previous category file
     if (oldAt) {
       const oldPath = path.join(DATA_DIR, `${oldAt}.xlsx`);
       if (fs.existsSync(oldPath)) {
         const wbOld = new ExcelJS.Workbook();
         await wbOld.xlsx.readFile(oldPath);
         let removed = false;
-
         wbOld.worksheets.forEach(ws => {
-          // find Station ID column
+          // locate Station ID column in row 2
           const hdrs = [];
           ws.getRow(2).eachCell((c,i) => hdrs[i-1] = String(c.value||'').trim());
           const idCol = hdrs.indexOf('Station ID') + 1;
           if (!idCol) return;
-
-          // scan & splice
+          // splice out the matching row
           for (let r = 3; r <= ws.rowCount; r++) {
             if (String(ws.getRow(r).getCell(idCol).value||'').trim() === stationId) {
               ws.spliceRows(r, 1);
@@ -581,19 +647,20 @@ ipcMain.handle('save-station-data', async (_event, updatedStation) => {
       }
     }
 
-    // 3️⃣ Ensure new category workbook exists & loaded
+    // 3) Load (or create) the new category workbook
     await addNewAssetTypeInternal(newAt);
     const newPath = path.join(DATA_DIR, `${newAt}.xlsx`);
-    const wbNew   = new ExcelJS.Workbook();
+    const wbNew = new ExcelJS.Workbook();
     await wbNew.xlsx.readFile(newPath);
 
-    // 4️⃣ Compute header sync lists
+    // 4) Prepare header sync: core vs. dynamic keys
+    // Core
     const CORE = new Set([
       'Station ID','Asset Type','Site Name',
       'Province','Latitude','Longitude',
-      'Status','Repair Priority'
+      'Status','Repair Ranking'
     ]);
-    // dynamic keys = everything in updatedStation except core props + both category keys
+    // Dynamic
     const allKeys = Object.keys(updatedStation).filter(k =>
       ![
         'stationId','stationName','latitude','longitude',
@@ -602,15 +669,14 @@ ipcMain.handle('save-station-data', async (_event, updatedStation) => {
     );
     const targetHeaders = Array.from(new Set([ ...CORE, ...allKeys ]));
 
-    // Sync headers across _all_ existing sheets
+    // 5) Sync headers across every sheet: drop extras, add missing
     wbNew.worksheets.forEach(ws => {
       const existing = [];
       ws.getRow(2).eachCell((c,i) => {
         const v = String(c.value||'').trim();
         existing[i-1] = v || null;
       });
-
-      // remove unwanted
+      // remove unwanted columns
       for (let i = existing.length - 1; i >= 0; i--) {
         const h = existing[i];
         if (h && !CORE.has(h) && !allKeys.includes(h)) {
@@ -618,41 +684,37 @@ ipcMain.handle('save-station-data', async (_event, updatedStation) => {
           existing.splice(i,1);
         }
       }
-
-      // add missing
+      // add missing columns at the end
       targetHeaders.forEach(hdr => {
         if (!existing.includes(hdr)) {
           const col = existing.length + 1;
           ws.spliceColumns(col, 0, []);
           const cell = ws.getRow(2).getCell(col);
-          cell.value     = hdr;
-          cell.font      = { bold: true };
+          cell.value = hdr;
+          cell.font = { bold: true };
           cell.alignment = { horizontal:'left', vertical:'middle' };
           existing.push(hdr);
         }
       });
     });
-
-    // 5️⃣ Get or create the _province_ sheet
+    // 6) Ensure the province sheet exists and has headers
     let wsTarget = wbNew.getWorksheet(newProv);
     if (!wsTarget) {
       wsTarget = wbNew.addWorksheet(newProv);
-
       // core two‐line header
       wsTarget.mergeCells('A1:H1');
-      wsTarget.getCell('A1').value     = 'General Information';
+      wsTarget.getCell('A1').value = 'General Information';
       wsTarget.getCell('A1').alignment = { horizontal:'center', vertical:'middle' };
-      wsTarget.getCell('A1').font      = { bold:true };
-
-      ['Station ID','Asset Type','Site Name','Province','Latitude','Longitude','Status','Repair Priority']
+      wsTarget.getCell('A1').font = { bold:true };
+      // row 2: core headers
+      ['Station ID','Asset Type','Site Name','Province','Latitude','Longitude','Status','Repair Ranking']
         .forEach((h,i) => {
           const c = wsTarget.getRow(2).getCell(i+1);
-          c.value     = h;
-          c.font      = { bold:true };
+          c.value = h;
+          c.font = { bold:true };
           c.alignment = { horizontal:'left', vertical:'middle' };
         });
-
-      // ─── NEW FIX: inject dynamic headers here too ────────────────────────
+      // inject dynamic headers too
       const post = [];
       wsTarget.getRow(2).eachCell((c,i) => {
         const v = String(c.value||'').trim();
@@ -663,47 +725,43 @@ ipcMain.handle('save-station-data', async (_event, updatedStation) => {
           const col = post.length + 1;
           wsTarget.spliceColumns(col, 0, []);
           const cell = wsTarget.getRow(2).getCell(col);
-          cell.value     = hdr;
-          cell.font      = { bold:true };
+          cell.value = hdr;
+          cell.font = { bold:true };
           cell.alignment = { horizontal:'left', vertical:'middle' };
           post.push(hdr);
         }
       });
     }
 
-    // 6️⃣ Build header→index map
+    // 7) Build header→column index map
     const headerMap = {};
     wsTarget.getRow(2).eachCell((c,i) => {
       const v = String(c.value||'').trim();
       if (v) headerMap[v] = i;
     });
 
-    // 7️⃣ Append the updatedStation row
+    // 8) Append the updated station row
     const row = wsTarget.getRow(wsTarget.rowCount + 1);
-
-    // core
-    row.getCell(headerMap['Station ID']).value      = stationId;
-    row.getCell(headerMap['Asset Type']).value      = newAt;
-    row.getCell(headerMap['Site Name']).value       =
-      updatedStation['Site Name'] || updatedStation.stationName;
-    row.getCell(headerMap['Province']).value        = newProv;
-    row.getCell(headerMap['Latitude']).value        =
-      Number(updatedStation.Latitude || updatedStation.latitude);
-    row.getCell(headerMap['Longitude']).value       =
-      Number(updatedStation.Longitude || updatedStation.longitude);
-    row.getCell(headerMap['Status']).value          = updatedStation.Status;
-    row.getCell(headerMap['Repair Priority']).value = updatedStation['Repair Priority'];
-
-    // dynamic
+    // core fields
+    row.getCell(headerMap['Station ID']).value = stationId;
+    row.getCell(headerMap['Asset Type']).value = newAt;
+    row.getCell(headerMap['Site Name']).value = updatedStation['Site Name'] || updatedStation.stationName;
+    row.getCell(headerMap['Province']).value = newProv;
+    row.getCell(headerMap['Latitude']).value = Number(updatedStation.Latitude || updatedStation.latitude);
+    row.getCell(headerMap['Longitude']).value = Number(updatedStation.Longitude || updatedStation.longitude);
+    row.getCell(headerMap['Status']).value = updatedStation.Status;
+    row.getCell(headerMap['Repair Ranking']).value = updatedStation['Repair Ranking'];
+    // dynamic fields
     allKeys.forEach(key => {
       const idx = headerMap[key];
       if (idx) row.getCell(idx).value = updatedStation[key] || '';
     });
-
     row.commit();
-    await wbNew.xlsx.writeFile(newPath);
 
+    // Save the changes
+    await wbNew.xlsx.writeFile(newPath);
     return { success: true, message: 'Station moved and saved.' };
+
   } catch (err) {
     console.error('save-station-data error:', err);
     return { success: false, message: err.message };
@@ -717,14 +775,24 @@ ipcMain.handle('save-station-data', async (_event, updatedStation) => {
  */
 const BASE_STATIONS_PATH = 'REPLACE_WITH_YOUR_ACTUAL_ABSOLUTE_PATH_TO_STATIONS_FOLDER';
 
+/**
+ * Reads a directory and returns its contents, optionally filtering by file extension
+ *    - dirPath: absolute path to the folder
+ *    - fileTypes: array of lowercase extensions (e.g. ['.jpg','.png']) or null to include all
+ * Returns an array of { name, path, isDirectory }
+ */
 async function listDirectoryContents(dirPath, fileTypes = null) {
   try {
+    // ensure the directory exists & is readable
     await fsPromises.access(dirPath);
+    // read all entries with metadata
     const items = await fsPromises.readdir(dirPath, { withFileTypes: true });
     return items
       .filter(item => {
+        // include everything if no filter or always include subfolders
         if (!fileTypes) return true;
         if (item.isDirectory()) return true;
+        // check file extension against allowed list
         const ext = path.extname(item.name).toLowerCase();
         return fileTypes.includes(ext);
       })
@@ -734,11 +802,23 @@ async function listDirectoryContents(dirPath, fileTypes = null) {
         isDirectory: item.isDirectory()
       }));
   } catch {
+    // directory missing or inaccessible → return empty list
     return [];
   }
 }
 
+/**
+ * IPC handler: gathers file/folder details for a given station
+ *    - Validates stationId & BASE_STATIONS_PATH configuration
+ *    - Builds a details object with:
+ *        • overview: station data from Excel
+ *        • inspectionHistory, highPriorityRepairs, documents, photos arrays
+ *    - Uses listDirectoryContents() to read each subfolder,
+ *      filtering images by extension under “Photos”
+ *    - Returns { success: true, data } or partial data with a warning message
+ */
 ipcMain.handle('get-station-file-details', async (event, stationId, stationDataFromExcel) => {
+  // reject if no ID or base path placeholder not updated
   if (!stationId) {
     return { success: false, message: "Station ID is required." };
   }
@@ -757,13 +837,17 @@ ipcMain.handle('get-station-file-details', async (event, stationId, stationDataF
   };
 
   try {
+    // ensure station folder exists
     await fsPromises.access(stationFolder);
-    details.inspectionHistory   = await listDirectoryContents(path.join(stationFolder, 'Inspection History'));
+
+    // read each category folder (Photos filtered by image extensions)
+    details.inspectionHistory = await listDirectoryContents(path.join(stationFolder, 'Inspection History'));
     details.highPriorityRepairs = await listDirectoryContents(path.join(stationFolder, 'High Priority Repairs'));
-    details.documents           = await listDirectoryContents(path.join(stationFolder, 'Documents'));
-    details.photos              = await listDirectoryContents(path.join(stationFolder, 'Photos'), ['.jpg','.jpeg','.png','.gif']);
+    details.documents = await listDirectoryContents(path.join(stationFolder, 'Documents'));
+    details.photos = await listDirectoryContents(path.join(stationFolder, 'Photos'), ['.jpg','.jpeg','.png','.gif']);
     return { success: true, data: details };
   } catch (err) {
+    // if any folder is missing or inaccessible, still return what we have
     console.warn(`File details error for ${stationId}:`, err.message);
     return { success: true, data: details, message: `Some folders may be missing.` };
   }
@@ -771,12 +855,23 @@ ipcMain.handle('get-station-file-details', async (event, stationId, stationDataF
 
 // ─── IPC: Open paths & files ─────────────────────────────────────────────────
 
+/**
+ * IPC listener: reveals a file or folder in the OS file explorer
+ *    - Triggered by renderer via 'open-path-in-explorer'
+ *    - Checks that the path exists, then calls shell.showItemInFolder()
+ */
 ipcMain.on('open-path-in-explorer', (event, filePath) => {
   if (filePath && fs.existsSync(filePath)) {
     shell.showItemInFolder(filePath);
   }
 });
 
+/**
+ * IPC listener: opens a file with the system default application
+ *    - Invoked by the renderer via 'open-file'
+ *    - Checks that the file path exists
+ *    - Calls shell.openPath(); on failure shows an error dialog
+ */
 ipcMain.on('open-file', (event, filePath) => {
   if (filePath && fs.existsSync(filePath)) {
     shell.openPath(filePath).catch(err => {
@@ -785,10 +880,20 @@ ipcMain.on('open-file', (event, filePath) => {
   }
 });
 
+
 // ─── IPC: Download window as PDF ────────────────────────────────────────────
 
+/**
+ * Captures a Windows screen snip and saves it as a PDF
+ *    - Launches the ms-screenclip tool and polls the clipboard for an image
+ *    - Prompts the user for a PDF save path
+ *    - Renders the image in an offscreen BrowserWindow and prints to PDF
+ */
 ipcMain.handle('download-window-pdf', async () => {
+  // trigger the Windows screen clip overlay
   exec('start ms-screenclip:');
+
+  // poll the clipboard for up to 30 seconds
   let img;
   for (let i = 0; i < 60; i++) {
     await new Promise(r => setTimeout(r, 500));
@@ -802,6 +907,7 @@ ipcMain.handle('download-window-pdf', async () => {
     return { success: false, message: 'No screenshot detected.' };
   }
 
+  // ask the user where to save the PDF
   const { canceled, filePath } = await dialog.showSaveDialog({
     title: 'Save snip as PDF…',
     defaultPath: `snippet-${Date.now()}.pdf`,
@@ -811,23 +917,32 @@ ipcMain.handle('download-window-pdf', async () => {
     return { success: false, message: 'Save cancelled.' };
   }
 
+  // render the captured image in an offscreen window
   const pdfWin = new BrowserWindow({ show: false, webPreferences: { offscreen: true } });
   const html = `
     <html><body style="margin:0">
       <img src="${img.toDataURL()}" style="width:100%;height:100%;object-fit:contain"/>
     </body></html>`;
   await pdfWin.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
+
+  // print the offscreen window to PDF and save
   const pdfBuffer = await pdfWin.webContents.printToPDF({
     marginsType: 0, printBackground: true, pageSize: 'A4', landscape: false
   });
   fs.writeFileSync(filePath, pdfBuffer);
+
   return { success: true, message: filePath };
 });
 
 
 
-// ─── Nuke Button ───────────────────────────────────────────────────
-
+/** 
+ * NUKE BUTTON
+ * IPC handler: deletes every .xlsx in DATA_DIR, then restarts the app
+ *    - Synchronously removes all Excel files in the data folder
+ *    - Calls app.relaunch() and app.exit(0) to restart cleanly
+ *    - Returns an error result if deletion fails
+ */
 ipcMain.handle('delete-all-data-files', async () => {
   try {
     const files = fsSync.readdirSync(DATA_DIR);
@@ -846,6 +961,11 @@ ipcMain.handle('delete-all-data-files', async () => {
 
 // ─── Upload Exxisting Infrastructure ───────────────────────────────────────────────────
 
+/**
+ * IPC handler: opens a native file dialog to pick an Excel file
+ *    - Filters for .xlsx and .xlsm
+ *    - Returns { canceled: boolean, filePath: string|null }
+ */
 ipcMain.handle('choose-excel-file', async () => {
   const { canceled, filePaths } = await dialog.showOpenDialog({
     filters: [{ name:'Excel', extensions:['xlsx','xlsm'] }],
@@ -854,6 +974,11 @@ ipcMain.handle('choose-excel-file', async () => {
   return { canceled, filePath: canceled ? null : filePaths[0] };
 });
 
+/**
+ * IPC handler: reads sheet names from a given Excel file
+ *    - Loads the workbook at filePath
+ *    - Returns { success: true, sheets: [name, …] } or { success: false, message }
+ */
 ipcMain.handle('get-excel-sheet-names', async (e, filePath) => {
   try {
     const wb = new ExcelJS.Workbook();
@@ -933,7 +1058,7 @@ ipcMain.handle('import-stations-from-excel', async (e, filePath, sheetName) => {
       const coreCols = [
         'Station ID','Asset Type','Site Name',
         'Province','Latitude','Longitude',
-        'Status','Repair Priority'
+        'Status','Repair Ranking'
       ];
       for (const p of provinces) {
         const ws = wbNew.addWorksheet(p);
@@ -993,7 +1118,7 @@ ipcMain.handle('import-stations-from-excel', async (e, filePath, sheetName) => {
           latitude:       lat,
           longitude:      lon,
           status:         get(row, 'Status')          || 'UNKNOWN',
-          repairPriority: get(row, 'Repair Priority') || ''
+          repairPriority: get(row, 'Repair Ranking') || ''
         },
         extraSections: {}
       };
@@ -1028,45 +1153,77 @@ ipcMain.handle('import-stations-from-excel', async (e, filePath, sheetName) => {
 
 
 
-// ─── Colour‐Picker Persistence ───────────────────────────────────────────────────
-// Read saved colours from lookups.xlsx → { "Category|Province": "#rrggbb", … }
+// ─────────── Colour‐Picker ───────────────────────────────────────────────────
+
+/**
+ * IPC handler: retrieves all saved color mappings (Category|Province → hex color)
+ *    - Ensures a “Colors” sheet exists in lookups.xlsx (with headers if newly created)
+ *    - Reads each row into an object keyed by "Category|Province"
+ *    - Returns that map for initializing the UI’s color pickers
+ */
 ipcMain.handle('get-saved-colors', async () => {
   const wb = await loadLookupWorkbook();
   let sheet = wb.getWorksheet('Colors');
   if (!sheet) {
+    // first time: create sheet and header row
     sheet = wb.addWorksheet('Colors');
     sheet.addRow(['Category','Province','Color']);
     await wb.xlsx.writeFile(LOOKUPS_PATH);
   }
   const map = {};
   sheet.eachRow((row, rn) => {
-    if (rn < 2) return;
+    if (rn < 2) {
+      return; // skip header
+    }
     const [cat, prov, col] = row.values.slice(1);
-    if (cat && prov && col) map[`${cat}|${prov}`] = col;
+    if (cat && prov && col) {
+      map[`${cat}|${prov}`] = col;
+    }
   });
   return map;
 });
 
-// Save or update one combo’s colour
+/**
+ * IPC handler: saves or updates a color for a specific Category|Province combo
+ *    - Loads the “Colors” sheet, adds it if missing
+ *    - Searches for an existing row matching category & province
+ *      • If found, updates its color cell
+ *      • Otherwise appends a new row
+ *    - Persists lookups.xlsx before returning { success: true }
+ */
 ipcMain.handle('save-color', async (_e, category, province, color) => {
   const wb = await loadLookupWorkbook();
   let sheet = wb.getWorksheet('Colors');
-  if (!sheet) sheet = wb.addWorksheet('Colors');
+  if (!sheet) {
+    // ensure the sheet exists
+    sheet = wb.addWorksheet('Colors');
+  }
+
   let found = false;
+  // scan each data row for a match
   sheet.eachRow((row, rn) => {
-    if (rn < 2) return;
+    if (rn < 2) {
+      return; // skip header
+    }
     const [cat, prov] = row.values.slice(1);
     if (cat === category && prov === province) {
+      // update the existing color
       row.getCell(3).value = color;
       found = true;
     }
   });
-  if (!found) sheet.addRow([category, province, color]);
+
+  if (!found) {
+    // no match → append a new mapping
+    sheet.addRow([category, province, color]);
+  }
+
+  // write back to disk
   await wb.xlsx.writeFile(LOOKUPS_PATH);
   return { success: true };
 });
 
-
+// This is not part of the program (pong.html is needed in the data project directory to use this piece of code)
 ipcMain.on('open-pong', () => {
   const gameFile = path.join(DATA_DIR, 'pong.html');
   const games = [ gameFile ];
@@ -1084,6 +1241,11 @@ ipcMain.on('open-pong', () => {
 
 // ─── Electron Window Setup ──────────────────────────────────────────────────
 
+/**
+ * Creates and shows the main application window
+ *    - 1200×800 initial size, then maximized
+ *    - Loads index.html with preload script for IPC
+ */
 function createWindow() {
   const mainWindow = new BrowserWindow({
     width: 1200, height: 800,
@@ -1098,6 +1260,7 @@ function createWindow() {
   mainWindow.maximize();
 }
 
+// On app ready: open the main window & re-open on macOS dock click if needed
 app.whenReady().then(() => {
   createWindow();
   app.on('activate', () => {
@@ -1107,9 +1270,9 @@ app.whenReady().then(() => {
   });
 });
 
+// Quit the app when all windows close
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
 });
-
