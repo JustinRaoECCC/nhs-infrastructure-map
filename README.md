@@ -4,24 +4,24 @@ An [Electron](https://www.electronjs.org/) application powered by [ExcelJS](http
 
 ---
 
-## 📝 Table of Contents
+## Table of Contents
 
-1. [🔍 Overview](#-overview)
-2. [🚀 Features](#-features)
-3. [📋 Prerequisites](#-prerequisites)
-4. [⚙️ Installation](#⚙️-installation)
-5. [🛠️ Usage](#️-usage)
-6. [🗂️ Project Structure](#️-project-structure)
-7. [🧩 Architecture & Design](#️-architecture--design)
-8. [🪲 Current Bugs / TODO List](#️-current-bugs--todo-list)
-9. [🔮 Roadmap](#-roadmap)
-10. [🤝 Contributing](#-contributing)
-11. [💬 Support & Troubleshooting](#-support--troubleshooting)
-12. [📜 License](#-license)
+1. [Overview](#-overview)
+2. [Features](#-features)
+3. [Prerequisites](#-prerequisites)
+4. [Installation](#⚙️-installation)
+5. [Usage](#️-usage)
+6. [Project Structure](#️-project-structure)
+7. [Architecture & Design](#️-architecture--design)
+8. [Current Bugs / TODO List](#️-current-bugs--todo-list)
+9. [Roadmap](#-roadmap)
+10. [Contributing](#-contributing)
+11. [Support & Troubleshooting](#-support--troubleshooting)
+12. [License](#-license)
 
 ---
 
-## 🔍 Overview
+## Overview
 
 `nhs-infrastructure-map` is a cross-platform desktop application built with Electron, enabling users to:
 
@@ -36,7 +36,7 @@ This tool empowers teams to maintain up-to-date infrastructure inventories, opti
 
 ---
 
-## 🚀 Features
+## Features
 
 * **Leaflet Map Integration**: Pan/zoom, custom marker icons, and priority-based coloring.
 * **List & Repairs Views**: Tabular list with sorting/grouping and a dedicated priority repairs view.
@@ -49,14 +49,14 @@ This tool empowers teams to maintain up-to-date infrastructure inventories, opti
 
 ---
 
-## 📋 Prerequisites
+## Prerequisites
 
 * **Node.js** ≥ v14.x (includes `npm`)
 * **Git** for cloning the repository
 
 ---
 
-## ⚙️ Installation
+## Installation
 
 ```bash
 # 1️⃣ Clone the repository
@@ -76,7 +76,7 @@ npm start
 
 ---
 
-## 🛠️ Usage
+## Usage
 
 1. **Initial Load**: On first run, `data/lookups.xlsx` and necessary asset-type files are created automatically.
 2. **Map View**: Select provinces/categories in the left filter panel. Hover markers for quick details; click for full editing.
@@ -95,7 +95,7 @@ npm start
 
 ---
 
-## 🗂️ Project Structure
+## Project Structure
 
 ```
 nhs-infrastructure-map/
@@ -120,7 +120,7 @@ nhs-infrastructure-map/
 
 ---
 
-## 🧩 Architecture & Design
+## Architecture & Design
 
 * **Electron**: Core framework for cross-platform desktop apps.
 * **ExcelJS**: Read/write `.xlsx` files for lookups, station data, and color persistence.
@@ -132,16 +132,16 @@ nhs-infrastructure-map/
 
 ---
 
-## 🪲 Current Bugs / TODO List
+## Current Bugs / TODO List
 
-* Section without fields appears uneditable in quick-view.
+* Cannot add sections without fields
 * No multi-user concurrency lock beyond in-memory; race conditions possible if multiple instances run.
 * Inactive stations: currently not auto-moved to an `INACTIVE` workbook; requires manual handling.
 * Confirm expected behavior for reactivating stations—should they move back and restore history?
 
 ---
 
-## 🔮 Roadmap
+## Roadmap
 
 * **v1.0**
 
@@ -149,4 +149,4 @@ nhs-infrastructure-map/
 
 ---
 
-## 🤝 Contributing
+## Contributing
