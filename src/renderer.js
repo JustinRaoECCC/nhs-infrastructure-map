@@ -167,13 +167,25 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
 
-  // Helper
+  // Helper for displaaying error message
   function showToast(msg, duration=2000) {
     const t = document.getElementById('toast');
     t.textContent = msg;
     t.classList.remove('hidden');
     setTimeout(() => t.classList.add('hidden'), duration);
   }
+
+  // normalize raw status into “Active”, “Inactive”, etc.
+  function normalizeStatus(raw) {
+    if (!raw) return 'Unknown';
+    switch (raw.trim().toLowerCase()) {
+      case 'active':     return 'Active';
+      case 'inactive':   return 'Inactive';
+      case 'mothballed': return 'Mothballed';
+      default:           return 'Unknown';
+    }
+  }
+
 
 
 
@@ -315,6 +327,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       console.log("Renderer: Requesting station data...");
       const rawData = await window.electronAPI.getStationData();
+      rawData.forEach(st => {
+        st.Status = normalizeStatus(st.Status);
+      });
       if (!Array.isArray(rawData) || rawData.length === 0) {
         // No stations → clear everything
         allStationData = [];
@@ -1235,16 +1250,72 @@ document.addEventListener('DOMContentLoaded', async () => {
   // 13) Save changes to an existing station (used by full detail page)
   // ────────────────────────────────────────────────────────────────────────────
   async function handleSaveChanges() {
-    if (!currentEditingStation) return;
+    // ─── 0) Basic field presence & format checks ───────────────────────────────
+    // Pull raw values (with fallbacks for when the user hasn't edited)
+    const rawId   = currentEditingStation['Station ID'];
+    const rawCat  = currentEditingStation['Category']       ?? currentEditingStation.category;
+    const rawName = currentEditingStation['Site Name']      ?? currentEditingStation.stationName;
+    const rawProv = currentEditingStation['General Information – Province'] ||
+                    currentEditingStation.Province;
+    const rawLat  = currentEditingStation.Latitude;
+    const rawLon  = currentEditingStation.Longitude;
 
-    // 1️⃣ Prevent duplicate Station IDs globally
-    const newId = String(currentEditingStation['Station ID'] || '').trim();
+    // Trim & validate
+    const newId   = rawId   != null ? String(rawId).trim()   : '';
+    const newCat  = rawCat  != null ? String(rawCat).trim()  : '';
+    const newName = rawName != null ? String(rawName).trim() : '';
+    const newProv = rawProv != null ? String(rawProv).trim() : '';
+    const parsedLat = parseFloat(rawLat);
+    const parsedLon = parseFloat(rawLon);
+
     if (!newId) {
-      showToast('Station ID cannot be empty.');
+      showToast('Station ID cannot be empty');
+      return;
+    }
+    if (!newCat) {
+      showToast('Category cannot be empty');
+      return;
+    }
+    if (!newName) {
+      showToast('Site Name cannot be empty');
+      return;
+    }
+    if (!newProv) {
+      showToast('Province cannot be empty');
+      return;
+    }
+    if (isNaN(parsedLat)) {
+      showToast('Latitude must be a valid number');
+      return;
+    }
+    if (isNaN(parsedLon)) {
+      showToast('Longitude must be a valid number');
       return;
     }
 
-    // Fetch the freshest list of all stations
+    // ─── 1) Validate non-empty quick-view sections & fields ────────────────────
+    const secBlocks = document.querySelectorAll(
+      '#quickSectionsContainer .quick-section'
+    );
+    for (const sec of secBlocks) {
+      const rows = sec.querySelectorAll('.quick-field-row');
+      if (rows.length === 0) {
+        showToast('Every section must have at least one field');
+        return;
+      }
+      for (const row of rows) {
+        const nameInput = row.children[0];
+        if (!nameInput.value.trim()) {
+          showToast('All field names must be filled');
+          return;
+        }
+      }
+    }
+
+    // ─── 2) Ensure we have an editing buffer ────────────────────────────────────
+    if (!currentEditingStation) return;
+
+    // ─── 3) Prevent duplicate Station IDs globally ──────────────────────────────
     let allRemote;
     try {
       allRemote = await window.electronAPI.getStationData();
@@ -1252,8 +1323,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       console.error('Error fetching station data for duplicate check:', err);
       allRemote = allStationData; // fallback
     }
-
-    // Check for conflict (exclude the one we’re editing)
     const conflict = allRemote.some(s =>
       String(s.stationId).trim() === newId &&
       String(s.stationId).trim() !== String(originalEditingStationId).trim()
@@ -1263,23 +1332,22 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
-    // 2️⃣ Grab Save button & message div
+    // ─── 4) Grab Save button & message div ──────────────────────────────────────
     let saveBtn = document.getElementById('saveChangesBtn');
     let msgDiv  = document.getElementById('saveMessage');
-
-    // 3️⃣ Show “Saving…” and disable button
     msgDiv.textContent = 'Saving…';
     if (saveBtn) saveBtn.disabled = true;
 
     try {
-      // 4️⃣ Persist changes to Excel
+      // ─── 5) Persist changes to Excel ──────────────────────────────────────────
       const result = await window.electronAPI.saveStationData(currentEditingStation);
 
       if (result.success) {
-        // 5️⃣ Update in-memory allStationData
+        // ─── 6) Update in-memory allStationData ──────────────────────────────────
         let idx = allStationData.findIndex(
-          s => s.stationId === originalEditingStationId &&
-              s.category  === currentEditingStation.category
+          s =>
+            s.stationId === originalEditingStationId &&
+            s.category  === currentEditingStation.category
         );
         if (idx === -1) {
           idx = allStationData.findIndex(
@@ -1291,51 +1359,47 @@ document.addEventListener('DOMContentLoaded', async () => {
           const rec = allStationData[idx];
 
           // Sync numeric coords
-          const newLat = parseFloat(currentEditingStation.Latitude);
-          const newLon = parseFloat(currentEditingStation.Longitude);
-          if (!isNaN(newLat)) rec.latitude = newLat;
-          if (!isNaN(newLon)) rec.longitude = newLon;
+          const newLatNum = parseFloat(currentEditingStation.Latitude);
+          const newLonNum = parseFloat(currentEditingStation.Longitude);
+          if (!isNaN(newLatNum)) rec.latitude = newLatNum;
+          if (!isNaN(newLonNum)) rec.longitude = newLonNum;
 
-          // Sync ID & Site Name in record
+          // Sync ID & Site Name
           rec.stationId   = currentEditingStation['Station ID'];
           rec.stationName = currentEditingStation['Site Name'];
 
           // Update tracker
-          originalEditingStationId = currentEditingStation['Station ID'];
+          originalEditingStationId = rec.stationId;
         }
 
-        // 6️⃣ Sync detail-page model
+        // ─── 7) Sync detail-page model ───────────────────────────────────────────
         if (currentStationDetailData) {
           currentStationDetailData.overview = JSON.parse(
             JSON.stringify(currentEditingStation)
           );
         }
 
-        // 7️⃣ Reflect a changed Category immediately
+        // ─── 8) Reflect changed Category immediately ─────────────────────────────
         if (currentEditingStation['Category']) {
           currentEditingStation.category = currentEditingStation['Category'];
         }
 
-        // 8️⃣ Reflect a changed Station ID immediately
-        currentEditingStation.stationId = currentEditingStation['Station ID'];
+        // ─── 9) Reflect changed Station ID & Name immediately ───────────────────
+        currentEditingStation.stationId   = currentEditingStation['Station ID'];
         currentEditingStation.stationName = currentEditingStation['Site Name'];
 
-        // 9️⃣ Fully reload all station data & UI
+        // ─── 🔟 Reload all data & UI ──────────────────────────────────────────────
         await loadDataAndInitialize();
-
-        // ─── Make sure the modal’s selects include any new province/category
         await loadLookups();
         await loadExistingStationIDs();
 
-        // 🔟 Redisplay Overview panel with updated data
+        // ─── 1️⃣1️⃣ Redisplay Overview with updated data ─────────────────────────
         setActiveDetailSection('overview');
         renderOverviewSection(currentEditingStation);
 
-        // 1️⃣1️⃣ Update page title
+        // ─── 1️⃣2️⃣ Update page title & show “Saved!” ────────────────────────────
         stationDetailTitle.textContent =
           `${currentEditingStation.stationName} (${currentEditingStation.stationId})`;
-
-        // 1️⃣2️⃣ Show “Saved!”
         saveBtn = document.getElementById('saveChangesBtn');
         msgDiv  = document.getElementById('saveMessage');
         msgDiv.textContent = 'Saved!';
@@ -1347,11 +1411,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       console.error('Error saving station:', err);
       msgDiv.textContent = `Error: ${err.message}`;
     } finally {
-      // 1️⃣3️⃣ Re-enable the button
+      // ─── 1️⃣3️⃣ Re-enable the button ─────────────────────────────────────────
       saveBtn = document.getElementById('saveChangesBtn');
       if (saveBtn) saveBtn.disabled = false;
     }
   }
+
 
   // ────────────────────────────────────────────────────────────────────────────
   // 14) “Full” station detail page (on click), with tabbed sections
@@ -1513,7 +1578,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           opt.textContent = optVal;
           fld.appendChild(opt);
         });
-        fld.value = value || 'Unknown';
+        fld.value = normalizeStatus(value);
       } else if (key === 'Repair Priority') {
         // Existing dropdown for Repair Priority
         fld = document.createElement('select');
@@ -2060,6 +2125,27 @@ document.addEventListener('DOMContentLoaded', async () => {
   // “Save Infrastructure” → collect data & call createNewStation; persist section headers
   // ────────────────────────────────────────────────────────────────────────────
   btnCreateStation.addEventListener('click', async () => {
+
+    // ─── 0) Validate that each section has ≥1 field and no blank names/values ─────────
+    const sectionEls = extraSectionsContainer.querySelectorAll('.section-container');
+    for (const secEl of sectionEls) {
+      const rows = secEl.querySelectorAll('.field-row');
+      // 0a) ensure at least one field
+      if (rows.length === 0) {
+        createStationMessage.textContent = 'Every section must have at least one field';
+        return;
+      }
+      // 0b) ensure no blank field-names or values
+      for (const row of rows) {
+        const name = row.children[0].value.trim();
+        if (!name) {
+          createStationMessage.textContent = 'All field names must be filled';
+          return;
+        }
+      }
+    }
+
+
     createStationMessage.textContent = '';
     const location  = selectLocation.value.trim();
     const assetType = selectAssetType.value.trim();
