@@ -1,7 +1,11 @@
 /* style.css */
+
+
 /* ───────────────────────────────────────────────────────────────────────── */
-/* Global reset + font */
+/* Global reset + font                                                   */
 /* ───────────────────────────────────────────────────────────────────────── */
+/* Remove default page margins and padding, set a sans-serif base font,    */
+/* ensure html/body occupy full height, and disable overflowing scroll.    */
 body, html {
   margin: 0;
   padding: 0;
@@ -10,6 +14,7 @@ body, html {
   overflow: hidden;
 }
 
+/* Flex container for the entire application; column layout fills viewport */
 .app-container {
   display: flex;
   flex-direction: column;
@@ -17,8 +22,9 @@ body, html {
 }
 
 /* ───────────────────────────────────────────────────────────────────────── */
-/* Title Bar */
+/* Title Bar                                                              */
 /* ───────────────────────────────────────────────────────────────────────── */
+/* Styles for the top header bar containing the app title and controls.    */
 .title-bar {
   background-color: #f0f0f0;
   padding: 10px 20px;
@@ -26,9 +32,11 @@ body, html {
   text-align: center;
   flex-shrink: 0;
 }
+/* Headline inside title bar: remove default margins, add bottom margin */
 .title-bar h1 {
   margin: 0 0 10px 0;
 }
+/* Buttons inside the title bar: small margin and padding for clickable area */
 .buttons-bar button {
   margin: 0 5px;
   padding: 8px 12px;
@@ -36,14 +44,16 @@ body, html {
 }
 
 /* ───────────────────────────────────────────────────────────────────────── */
-/* Main View: Filter Panel + Map/List + Details Panel */
+/* Main View: Filter Panel + Map/List + Details Panel                     */
 /* ───────────────────────────────────────────────────────────────────────── */
+/* Wrapper for the main content area: holds filter, map/list, and details */
 .main-view-wrapper {
   display: flex;
   flex-grow: 1;
   overflow: hidden;
 }
 
+/* Inner content area: positions panels and map/list */
 .main-content {
   display: flex;
   flex-grow: 1;
@@ -51,22 +61,29 @@ body, html {
   position: relative;
 }
 
+/* Shared styles for both left and right side panels */
 .left-panel, .right-panel {
   padding: 15px;
   background-color: #f9f9f9;
   overflow-y: auto;
   font-size: 0.9em;
-  transition: width 0.3s ease, padding 0.3s ease, opacity 0.3s ease;
+  transition: 
+    width 0.3s ease,
+    padding 0.3s ease,
+    opacity 0.3s ease;
   flex-shrink: 0;
 }
+/* Specific width and border for left filter panel */
 .left-panel {
   width: 280px;
   border-right: 1px solid #ccc;
 }
+/* Specific width and border for right details panel */
 .right-panel {
   width: 350px;
   border-left: 1px solid #ccc;
 }
+/* Collapsed state: hide panel completely */
 .left-panel.collapsed, .right-panel.collapsed {
   width: 0;
   padding: 0;
@@ -75,11 +92,13 @@ body, html {
   overflow: hidden;
 }
 
+/* Main map container expands to fill available space */
 .map-container {
   flex-grow: 1;
   height: 100%;
 }
 
+/* Toggle buttons between panels and main content */
 .panel-toggle-button {
   background-color: #e0e0e0;
   border: 1px solid #ccc;
@@ -93,10 +112,13 @@ body, html {
   flex-shrink: 0;
 }
 
+/* Headings inside panels */
 .left-panel h2, .right-panel h2 {
   margin-top: 0;
   font-size: 1.2em;
 }
+
+/* Filter group sections in the left panel */
 .filter-group {
   margin-bottom: 15px;
 }
@@ -110,6 +132,7 @@ body, html {
   vertical-align: middle;
 }
 
+/* Detail panel content paragraphs */
 #detailsContent p {
   margin-top: 0;
   margin-bottom: 6px;
@@ -134,8 +157,9 @@ body, html {
 }
 
 /* ───────────────────────────────────────────────────────────────────────── */
-/* List View */
+/* List View                                                              */
 /* ───────────────────────────────────────────────────────────────────────── */
+/* Container for the table-based station list */
 .list-view-container {
   flex-grow: 1;
   height: 100%;
@@ -143,27 +167,26 @@ body, html {
   padding: 10px;
   background-color: #fff;
 }
-
+/* Station list table styling */
 #stationListTable {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.9em;
 }
-
 #stationListTable th, #stationListTable td {
   border: 1px solid #ddd;
   padding: 8px;
   text-align: left;
   white-space: nowrap;
 }
-
+/* Sticky header row */
 #stationListTable th {
   background-color: #f2f2f2;
   position: sticky;
   top: 0;
   z-index: 5;
 }
-
+/* Hover effect on rows */
 #stationListTable tbody tr {
   cursor: pointer;
   transition: background-color 0.2s ease;
@@ -172,14 +195,15 @@ body, html {
   background-color: #f0f8ff;
 }
 
-/* Utility class to hide elements */
+/* Utility class to completely hide elements */
 .hidden {
   display: none !important;
 }
 
 /* ───────────────────────────────────────────────────────────────────────── */
-/* Station Detail Page */
+/* Station Detail Page                                                     */
 /* ───────────────────────────────────────────────────────────────────────── */
+/* Full-page detail view styling */
 .station-detail-page-container {
   padding: 20px;
   height: calc(100vh - 70px);
@@ -188,6 +212,7 @@ body, html {
   box-sizing: border-box;
 }
 
+/* Back button to return to main view */
 #backToMainViewBtn {
   margin-bottom: 15px;
   padding: 8px 15px;
@@ -196,14 +221,14 @@ body, html {
   border: 1px solid #ccc;
   border-radius: 4px;
 }
-
+/* Station detail title styling */
 #stationDetailTitle {
   margin-top: 0;
   margin-bottom: 20px;
   border-bottom: 1px solid #eee;
   padding-bottom: 10px;
 }
-
+/* Tab navigation for detail sections */
 .station-detail-nav {
   margin-bottom: 20px;
   border-bottom: 1px solid #ccc;
@@ -225,7 +250,7 @@ body, html {
   border-bottom-color: #fff;
   font-weight: bold;
 }
-
+/* Content panels for each tab, hidden by default */
 .station-detail-content .detail-section {
   display: none;
   padding: 15px;
@@ -236,7 +261,7 @@ body, html {
 .station-detail-content .detail-section.active {
   display: block;
 }
-
+/* File list styling in detail page */
 .file-list {
   list-style: none;
   padding: 0;
@@ -252,6 +277,7 @@ body, html {
 .file-list li:last-child {
   border-bottom: none;
 }
+/* Thumbnail styling for photo gallery */
 .file-list img {
   max-width: 150px;
   max-height: 150px;
@@ -265,6 +291,7 @@ body, html {
 /* Print Styles */
 /* ───────────────────────────────────────────────────────────────────────── */
 @media print {
+  /* Hide interactive UI elements when printing */
   .title-bar .buttons-bar,
   .panel-toggle-button,
   #saveChangesBtn,
@@ -277,7 +304,7 @@ body, html {
   .station-detail-nav {
     display: none !important;
   }
-
+  /* Expand panels for print layout */
   .left-panel, .right-panel {
     width: 200px !important;
     opacity: 1 !important;
@@ -289,7 +316,7 @@ body, html {
   .left-panel.collapsed, .right-panel.collapsed {
     display: none !important;
   }
-
+  /* Ensure main containers show content */
   .map-container, .list-view-container, .station-detail-page-container {
     flex-grow: 1 !important;
     width: auto !important;
@@ -317,8 +344,9 @@ body, html {
 }
 
 /* ───────────────────────────────────────────────────────────────────────── */
-/* Group row styles for list view */
+/* Group row styles for list view                                          */
 /* ───────────────────────────────────────────────────────────────────────── */
+/* Styling for category/province group headings in tables */
 .province-group-row th {
   background: #dde4ea;
   font-weight: bold;
@@ -334,9 +362,11 @@ body, html {
   z-index: 4;
 }
 
+
 /* ───────────────────────────────────────────────────────────────────────── */
-/* Station-row hover styling */
+/* Station-row hover styling                                                */
 /* ───────────────────────────────────────────────────────────────────────── */
+/* Hover effect for any station-data-row */
 .station-data-row {
   cursor: pointer;
 }
@@ -345,8 +375,9 @@ body, html {
 }
 
 /* ───────────────────────────────────────────────────────────────────────── */
-/* “Add Infrastructure” Modal + Button */
+/* “Add Infrastructure” Modal + Button                                     */
 /* ───────────────────────────────────────────────────────────────────────── */
+/* Floating “Add Infrastructure” button */
 #btnAddInfra {
   position: absolute;
   bottom: 20px;
@@ -359,8 +390,7 @@ body, html {
   border-radius: 4px;
   cursor: pointer;
 }
-
-/* Modal overlay */
+/* Modal overlay covers entire viewport */
 #addInfraModal {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
@@ -370,8 +400,7 @@ body, html {
   align-items: center;
   z-index: 9999;
 }
-
-/* Modal content */
+/* Inner modal content styling */
 #addInfraModal .modal-content {
   background: white;
   border-radius: 6px;
@@ -381,17 +410,16 @@ body, html {
   overflow-y: auto;
   box-shadow: 0 2px 10px rgba(0,0,0,0.25);
 }
-
+/* Modal header text */
 #addInfraModal .modal-header {
   font-size: 1.2em;
   margin-bottom: 10px;
 }
-
+/* Labels and inputs inside modal */
 #addInfraModal label {
   display: block;
   margin-top: 10px;
 }
-
 #addInfraModal input[type="text"],
 #addInfraModal select {
   width: 100%;
@@ -399,41 +427,39 @@ body, html {
   margin-top: 4px;
   box-sizing: border-box;
 }
-
+/* Buttons within modal */
 #addInfraModal button {
   margin-top: 15px;
   padding: 8px 12px;
 }
-
+/* Close (“×”) button in modal */
 #addInfraModal .close-modal {
   float: right;
   cursor: pointer;
   font-size: 1.1em;
 }
-
+/* Sections created dynamically in modal */
 #addInfraModal .section-container {
   border: 1px solid #ccc;
   padding: 10px;
   margin-top: 15px;
 }
-
+/* Section header: title + delete button */
 #addInfraModal .section-container .section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
-
+/* Field rows inside each section */
 #addInfraModal .section-container .field-row {
   display: flex;
   justify-content: space-between;
   margin-top: 8px;
 }
-
 #addInfraModal .section-container .field-row input {
   flex: 1;
   margin-right: 8px;
 }
-
 #addInfraModal .section-container .remove-field-btn,
 #addInfraModal .section-container .remove-section-btn {
   background: transparent;
@@ -443,7 +469,10 @@ body, html {
   font-size: 1em;
 }
 
-/* ─── Repairs table styling ──────────────────────────────────────────────── */
+/* ───────────────────────────────────────────────────────────────────────── */
+/* Repairs table styling                                                    */
+/* ───────────────────────────────────────────────────────────────────────── */
+/* Similar styling as station list, but with extra columns */
 #repairsListTable {
   width: 100%;
   border-collapse: collapse;
@@ -471,8 +500,7 @@ body, html {
 } 
 
 
-/* test */
-/* Repairs‐view grouping by priority */
+/* Repairs-view grouping by priority */
 .repair-ranking-group-row th {
   background: #f2efe7;
   font-weight: bold;
@@ -481,7 +509,10 @@ body, html {
   z-index: 5;
 }
 
-/* ─── Toolbar styling ───────────────────────────────────────────────── */
+/* ───────────────────────────────────────────────────────────────────────── */
+/* Toolbar styling                                                          */
+/* ───────────────────────────────────────────────────────────────────────── */
+/* Flex layout for the title bar’s controls */ 
 .title-bar .buttons-bar {
   display: flex;
   gap: 8px;
@@ -489,7 +520,7 @@ body, html {
   align-items: center;
   margin-top: 4px;
 }
-
+/* Base styles for select and button in toolbar */
 .title-bar .buttons-bar select,
 .title-bar .buttons-bar button {
   padding: 6px 12px;
@@ -500,41 +531,41 @@ body, html {
   cursor: pointer;
   transition: background-color 0.2s, box-shadow 0.2s;
 }
-
+/* Custom arrow for selects */
 .title-bar .buttons-bar select {
-  /* remove default OS arrow if you like */
   appearance: none;
   background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23666'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 10px center;
   background-size: 10px 6px;
-  padding-right: 32px; /* room for our arrow */
+  padding-right: 32px;
 }
-
+/* Focus styles for accessibility */
 .title-bar .buttons-bar select:focus,
 .title-bar .buttons-bar button:focus {
   outline: none;
   box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
 }
-
+/* Primary button color */
 .title-bar .buttons-bar button {
   background-color: #007bff;
   border-color: #007bff;
   color: white;
 }
-
 .title-bar .buttons-bar button:hover {
   background-color: #0069d9;
 }
-
-/* Optional: tighten up the Download button icon if you have one */
+/* Align icon and text inside Download button */
 .title-bar .buttons-bar #btnDownload {
   display: flex;
   align-items: center;
   gap: 4px;
 }
 
-/* style.css */
+/* ───────────────────────────────────────────────────────────────────────── */
+/* Toast notification element                                              */
+/* ───────────────────────────────────────────────────────────────────────── */
+/* Centered, red error toast for feedback */
 #toast {
   position: fixed;
   top: 50%;
@@ -549,9 +580,3 @@ body, html {
   z-index: 10000;
   white-space: nowrap;
 }
-
-/* ensure hidden still just sets display:none */
-.hidden {
-  display: none;
-}
-

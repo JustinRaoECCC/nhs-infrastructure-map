@@ -168,7 +168,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 
   // Helper for displaaying error message
-  function showToast(msg, duration=2000) {
+  function showToast(msg, duration=1000) {
     const t = document.getElementById('toast');
     t.textContent = msg;
     t.classList.remove('hidden');

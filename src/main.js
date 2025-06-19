@@ -480,7 +480,7 @@ ipcMain.handle('add-new-location', async (event, newLocation) => {
 
 // Add a new asset type & create its own workbook
 ipcMain.handle('add-new-asset-type', (e, at) => { 
-  addNewAssetTypeInternal(at);
+  return addNewAssetTypeInternal(at);
 });
 
 // ─── IPC: Station CRUD ───────────────────────────────────────────────────────
@@ -493,8 +493,8 @@ ipcMain.handle('add-new-asset-type', (e, at) => {
  *   extraSections: { [sectionName]: { [fieldName]: value, … }, … }
  * }
  */
-ipcMain.handle('create-new-station', (e, station) => {
-  createNewStationInternal(station);
+ipcMain.handle('create-new-station', async (e, station) => {
+  return await createNewStationInternal(station);
 });
 
 /**
