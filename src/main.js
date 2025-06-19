@@ -773,7 +773,7 @@ ipcMain.handle('save-station-data', async (_event, updatedStation) => {
  * get-station-file-details:
  *   - Reads inspectionHistory, highPriorityRepairs, documents, photos from disk.
  */
-const BASE_STATIONS_PATH = 'REPLACE_WITH_YOUR_ACTUAL_ABSOLUTE_PATH_TO_STATIONS_FOLDER';
+const BASE_STATIONS_PATH = 'C:\\Users\\nitsu\\OneDrive\\Documents\\Stations';
 
 /**
  * Reads a directory and returns its contents, optionally filtering by file extension
@@ -807,6 +807,7 @@ async function listDirectoryContents(dirPath, fileTypes = null) {
   }
 }
 
+
 /**
  * IPC handler: gathers file/folder details for a given station
  *    - Validates stationId & BASE_STATIONS_PATH configuration
@@ -818,39 +819,70 @@ async function listDirectoryContents(dirPath, fileTypes = null) {
  *    - Returns { success: true, data } or partial data with a warning message
  */
 ipcMain.handle('get-station-file-details', async (event, stationId, stationDataFromExcel) => {
-  // reject if no ID or base path placeholder not updated
   if (!stationId) {
     return { success: false, message: "Station ID is required." };
   }
-  if (BASE_STATIONS_PATH === 'REPLACE_WITH_YOUR_ACTUAL_ABSOLUTE_PATH_TO_STATIONS_FOLDER') {
-    return { success: false, message: "Base station path not configured." };
-  }
 
-  const stationFolder = path.join(BASE_STATIONS_PATH, stationId);
-  const details = {
-    stationId,
-    overview: stationDataFromExcel,
-    inspectionHistory: [],
-    highPriorityRepairs: [],
-    documents: [],
-    photos: []
-  };
-
+  // 1) Locate the station’s folder as before
+  let dirEntries;
   try {
-    // ensure station folder exists
-    await fsPromises.access(stationFolder);
-
-    // read each category folder (Photos filtered by image extensions)
-    details.inspectionHistory = await listDirectoryContents(path.join(stationFolder, 'Inspection History'));
-    details.highPriorityRepairs = await listDirectoryContents(path.join(stationFolder, 'High Priority Repairs'));
-    details.documents = await listDirectoryContents(path.join(stationFolder, 'Documents'));
-    details.photos = await listDirectoryContents(path.join(stationFolder, 'Photos'), ['.jpg','.jpeg','.png','.gif']);
-    return { success: true, data: details };
+    dirEntries = await fsPromises.readdir(BASE_STATIONS_PATH, { withFileTypes: true });
   } catch (err) {
-    // if any folder is missing or inaccessible, still return what we have
-    console.warn(`File details error for ${stationId}:`, err.message);
-    return { success: true, data: details, message: `Some folders may be missing.` };
+    return { success: false, message: `Cannot read Stations directory: ${err.message}` };
   }
+  const match = dirEntries.find(d =>
+    d.isDirectory() &&
+    d.name.toUpperCase().endsWith(`_${stationId.toUpperCase()}`)
+  );
+  if (!match) {
+    return { success: false, message: `No folder matching "*_${stationId}" found.` };
+  }
+  const stationFolder = path.join(BASE_STATIONS_PATH, match.name);
+
+  // 2) Read *all* root entries
+  const rootEntries = await listDirectoryContents(stationFolder);
+
+  // 3) Build inspectionHistory either from a real subfolder… or fallback to year-prefixed folders
+  let inspectionHistory = await listDirectoryContents(path.join(stationFolder, 'Inspection History'));
+  if (inspectionHistory.length === 0) {
+    // exclude any other “named” categories you have
+    const exclude = new Set([
+      'High Priority Repairs',
+      'Documents',
+      'Photos',
+      'Thumbs',         // DB file folder
+      'STATION_INFO'
+    ]);
+    inspectionHistory = rootEntries
+      .filter(e => e.isDirectory && !exclude.has(e.name))
+      // sort by the leading 4-digit year, ascending
+      .sort((a, b) => {
+        const yA = parseInt((a.name.match(/^(\d{4})/)||[])[1] || '0', 10);
+        const yB = parseInt((b.name.match(/^(\d{4})/)||[])[1] || '0', 10);
+        return yA - yB;
+      });
+  }
+
+  // 4) Continue to pick up the other sections from their usual subfolders
+  const highPriorityRepairs = await listDirectoryContents(path.join(stationFolder, 'High Priority Repairs'));
+  const documents           = await listDirectoryContents(path.join(stationFolder, 'Documents'));
+  const photos              = await listDirectoryContents(
+    path.join(stationFolder, 'Photos'),
+    ['.jpg', '.jpeg', '.png', '.gif']
+  );
+
+  // 5) Return
+  return {
+    success: true,
+    data: {
+      stationId,
+      overview: stationDataFromExcel,
+      inspectionHistory,
+      highPriorityRepairs,
+      documents,
+      photos
+    }
+  };
 });
 
 // ─── IPC: Open paths & files ─────────────────────────────────────────────────
