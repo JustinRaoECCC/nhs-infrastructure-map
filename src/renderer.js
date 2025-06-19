@@ -168,8 +168,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 
   // Helper for displaaying error message
-  function showToast(msg, duration=1000) {
-    const t = document.getElementById('toast');
+  function showAlert(msg, duration=1000) {
+    const t = document.getElementById('alert');
     t.textContent = msg;
     t.classList.remove('hidden');
     setTimeout(() => t.classList.add('hidden'), duration);
@@ -997,7 +997,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const oldName = sectionDiv.dataset.sectionName;
       const newName = e.target.value.trim();
       if (!newName) {
-        showToast('Section name cannot be empty.');
+        showAlert('Section name cannot be empty.');
         titleInput.value = oldName;
         return;
       }
@@ -1067,7 +1067,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const oldKey = entry.fullKey;
         const newFieldName = e.target.value.trim();
         if (!newFieldName) {
-          showToast('Field name cannot be empty.');
+          showAlert('Field name cannot be empty.');
           keyInput.value = entry.fieldName;
           return;
         }
@@ -1160,7 +1160,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       keyInput.addEventListener('change', e => {
         const newFieldName = e.target.value.trim();
         if (!newFieldName) {
-          showToast('Field name cannot be empty.');
+          showAlert('Field name cannot be empty.');
           keyInput.value = '';
           return;
         }
@@ -1175,7 +1175,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       // When user types a value, save it under that new key
       valInput.addEventListener('change', e => {
         if (!entry.fieldName) {
-          showToast('Please set a field name first.');
+          showAlert('Please set a field name first.');
           valInput.value = '';
           return;
         }
@@ -1273,27 +1273,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     const parsedLon = parseFloat(rawLon);
 
     if (!newId) {
-      showToast('Station ID cannot be empty');
+      showAlert('Station ID cannot be empty');
       return;
     }
     if (!newCat) {
-      showToast('Category cannot be empty');
+      showAlert('Category cannot be empty');
       return;
     }
     if (!newName) {
-      showToast('Site Name cannot be empty');
+      showAlert('Site Name cannot be empty');
       return;
     }
     if (!newProv) {
-      showToast('Province cannot be empty');
+      showAlert('Province cannot be empty');
       return;
     }
     if (isNaN(parsedLat)) {
-      showToast('Latitude must be a valid number');
+      showAlert('Latitude must be a valid number');
       return;
     }
     if (isNaN(parsedLon)) {
-      showToast('Longitude must be a valid number');
+      showAlert('Longitude must be a valid number');
       return;
     }
 
@@ -1304,13 +1304,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     for (const sec of secBlocks) {
       const rows = sec.querySelectorAll('.quick-field-row');
       if (rows.length === 0) {
-        showToast('Every section must have at least one field');
+        showAlert('Every section must have at least one field');
         return;
       }
       for (const row of rows) {
         const nameInput = row.children[0];
         if (!nameInput.value.trim()) {
-          showToast('All field names must be filled');
+          showAlert('All field names must be filled');
           return;
         }
       }
@@ -1332,7 +1332,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       String(s.stationId).trim() !== String(originalEditingStationId).trim()
     );
     if (conflict) {
-      showToast(`Station ID "${newId}" already exists. Please choose a unique ID.`);
+      showAlert(`Station ID "${newId}" already exists. Please choose a unique ID.`);
       return;
     }
 
@@ -1551,7 +1551,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
           });
       } else if (pwd !== null) {
-        showToast('Incorrect password.');
+        showAlert('Incorrect password.');
       }
     });
     titleBar.appendChild(unlockBtn);
@@ -1651,7 +1651,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const newName = await showSectionNameDialog('');
       if (!newName) return;
       if (dynContainer.querySelector(`[data-section-name="${newName}"]`)) {
-        showToast('Section already exists.');
+        showAlert('Section already exists.');
         return;
       }
       const block = createQuickSectionBlock(newName, []);
@@ -1844,12 +1844,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       const { success, message } = await window.electronAPI.downloadWindowAsPDF();
       if (success) {
-        showToast(`✅ Saved PDF to:\n${message}`);
+        showAlert(`✅ Saved PDF to:\n${message}`);
       } else if (message !== 'Save cancelled.') {
-        showToast(`⚠️ ${message}`);
+        showAlert(`⚠️ ${message}`);
       }
     } catch (err) {
-      showToast(`❌ Error: ${err.message}`);
+      showAlert(`❌ Error: ${err.message}`);
     } finally {
       btn.textContent = oldText;
       btn.disabled = false;
@@ -1963,17 +1963,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   btnSaveGeneralInfo.addEventListener('click', () => {
     const stnId = inputStationId.value.trim();
     if (!stnId) {
-      showToast('Station ID cannot be empty.');
+      showAlert('Station ID cannot be empty.');
       return;
     }
     if (existingStationIDs.has(stnId)) {
-      showToast(`Station ID "${stnId}" already exists. Choose a different ID.`);
+      showAlert(`Station ID "${stnId}" already exists. Choose a different ID.`);
       return;
     }
     const lat = parseFloat(inputLatitude.value);
     const lon = parseFloat(inputLongitude.value);
     if (isNaN(lat) || isNaN(lon)) {
-      showToast('Latitude and Longitude must be valid numbers.');
+      showAlert('Latitude and Longitude must be valid numbers.');
       return;
     }
     extraSectionsContainer.style.display = 'block';
@@ -1996,7 +1996,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       selectLocation.dispatchEvent(new Event('change'));
       maybeShowGeneralForm();
     } else {
-      showToast('Error saving new location: ' + res.message);
+      showAlert('Error saving new location: ' + res.message);
     }
   });
 
@@ -2012,7 +2012,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       selectAssetType.value = newAT;
       maybeShowGeneralForm();
     } else {
-      showToast('Error saving new asset type: ' + res.message);
+      showAlert('Error saving new asset type: ' + res.message);
     }
   });
   // ────────────────────────────────────────────────────────────────────────────
@@ -2202,7 +2202,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       const res = await window.electronAPI.createNewStation(stationObject);
       if (res.success) {
-        showToast('Infrastructure created successfully!');
+        showAlert('Infrastructure created successfully!');
         closeModal();
 
         // Reload everything
@@ -2275,10 +2275,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.electronAPI.deleteAllDataFiles()
           .then(res => {
             if (res.success) {
-              showToast('✅ All .xlsx files deleted.');
+              showAlert('✅ All .xlsx files deleted.');
               loadDataAndInitialize();
             }
-            else showToast('❌ Error: ' + res.message);
+            else showAlert('❌ Error: ' + res.message);
           });
       }
     }
@@ -2306,7 +2306,7 @@ btnChooseExcel.addEventListener('click', async () => {
       sheetSelectContainer.style.display = 'block';
       btnImportSheet.disabled = false;
     } else {
-      showToast('Could not read workbook: ' + sheetsRes.message);
+      showAlert('Could not read workbook: ' + sheetsRes.message);
     }
   }
 });

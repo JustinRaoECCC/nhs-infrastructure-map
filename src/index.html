@@ -1,10 +1,15 @@
+<!-- index.html -->
+
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8">
+  <!-- ───────────────────────────────────────────────────────────────────────── -->
+  <!-- Document Metadata & Security Policy                                   -->
+  <!-- ───────────────────────────────────────────────────────────────────────── -->
+  <meta charset="UTF-8" />
   <title>NHS Infrastructure Map</title>
-
-  <!-- Leaflet CSS -->
+  
+  <!-- Leaflet stylesheet from CDN (map tiles and controls) -->
   <link
     rel="stylesheet"
     href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
@@ -12,36 +17,48 @@
     crossorigin=""
   />
 
-  <!-- Our custom CSS -->
+  <!-- Our custom application-wide CSS -->
   <link rel="stylesheet" href="style.css" />
 
+  <!-- Content Security Policy: restricts sources for scripts, styles, images -->
   <meta http-equiv="Content-Security-Policy"
-        content="script-src 'self' https://unpkg.com; 
-                 style-src 'self' https://unpkg.com 'unsafe-inline'; 
-                 img-src 'self' data: https://*.tile.openstreetmap.org https://unpkg.com;">
+        content="
+          script-src 'self' https://unpkg.com;
+          style-src 'self' https://unpkg.com 'unsafe-inline';
+          img-src 'self' data: https://*.tile.openstreetmap.org https://unpkg.com;
+        ">
 </head>
 <body>
+  <!-- ───────────────────────────────────────────────────────────────────────── -->
+  <!-- Application Container (Flex column)                                   -->
+  <!-- ───────────────────────────────────────────────────────────────────────── -->
   <div class="app-container">
+
     <!-- ───────────────────────────────────────────────────────────────────────── -->
-    <!-- Title Bar -->
+    <!-- Title Bar: App Title + Controls                                       -->
     <!-- ───────────────────────────────────────────────────────────────────────── -->
     <div class="title-bar">
+      <!-- Main heading -->
       <h1>NHS Infrastructure Map</h1>
+      <!-- Toolbar: view toggles, download button -->
       <div class="buttons-bar">
+        <!-- View mode selector -->
         <select id="viewModeSelect" title="Select view">
           <option value="map">Map View</option>
           <option value="list">List View</option>
           <option value="repairs">Priority View</option>
         </select>
 
+        <!-- Map style selector -->
         <select id="mapStyleSelect" title="Select map style">
           <option value="categorized">Categorized Map</option>
           <option value="priority">Priority Map</option>
         </select>
 
+        <!-- Download current view as PDF -->
         <button id="btnDownload">Download</button>
 
-
+        <!-- List-view-specific controls (hidden initially) -->
         <div id="listViewControls" style="display: none; align-items: center; margin-left: 10px;">
           <label for="sortSelect" style="margin-right:4px;">Sort by:</label>
           <select id="sortSelect" title="Sort list view">
@@ -52,7 +69,7 @@
           </select>
         </div>
 
-        <!-- after your listViewControls div -->
+        <!-- Repairs-view-specific controls (hidden initially) -->
         <div id="repairsViewControls" style="display:none; align-items:center; margin-left:10px;">
           <label for="repairsSortSelect" style="margin-right:4px;">Sort by:</label>
           <select id="repairsSortSelect">
@@ -62,28 +79,27 @@
             <option value="location">Location</option>
           </select>
         </div>
-
-
       </div>
     </div>
 
     <!-- ───────────────────────────────────────────────────────────────────────── -->
-    <!-- Main View Wrapper: Filter Panel + Map/List + Details Panel -->
+    <!-- Main View Wrapper: Filter Panel + Map/List + Details Panel            -->
     <!-- ───────────────────────────────────────────────────────────────────────── -->
     <div class="main-view-wrapper" id="mainViewWrapper">
       <div class="main-content" id="mainContentArea">
-        <!-- Left Filter Panel -->
+        
+        <!-- Left filter panel -->
         <div class="left-panel" id="filterPanel">
           <h2>Filters</h2>
         </div>
+        <!-- Toggle button to collapse/expand filter panel -->
         <button
           class="panel-toggle-button"
           id="toggleLeftPanelButton"
           title="Toggle Filter Panel"
-        >
-        </button>
+        ></button>
 
-        <!-- Map Container -->
+        <!-- Map container -->
         <div id="map" class="map-container"></div>
 
         <!-- List View (hidden by default) -->
@@ -103,8 +119,7 @@
           </table>
         </div>
 
-
-        <!-- Repairs Priority View -->
+        <!-- Repairs Priority View (hidden by default) -->
         <div id="repairsViewContainer" class="list-view-container hidden">
           <table id="repairsListTable">
             <thead>
@@ -124,31 +139,33 @@
           </table>
         </div>
 
-
-
-        <!-- Right Details Panel -->
+        <!-- Toggle button to collapse/expand details panel -->
         <button
           class="panel-toggle-button"
           id="toggleRightPanelButton"
           title="Toggle Details Panel"
-        >
-          >
-        </button>
+        >></button>
+
+        <!-- Right details panel -->
         <div class="right-panel" id="detailsPanel">
           <h2>Station Details</h2>
           <div id="detailsContent">
             <p>Click a station or hover in list.</p>
           </div>
         </div>
+
       </div>
     </div>
 
     <!-- ───────────────────────────────────────────────────────────────────────── -->
-    <!-- Station Detail Page (hidden by default) -->
+    <!-- Station Detail Page: Full record view (hidden by default)             -->
     <!-- ───────────────────────────────────────────────────────────────────────── -->
     <div id="stationDetailPage" class="station-detail-page-container hidden">
+      <!-- Back button -->
       <button id="backToMainViewBtn">← Back to Main View</button>
+      <!-- Title updated dynamically -->
       <h2 id="stationDetailTitle">Station Details</h2>
+      <!-- Tab navigation -->
       <div class="station-detail-nav">
         <button class="detail-nav-btn active" data-section="overview">Overview</button>
         <button class="detail-nav-btn" data-section="inspectionHistory">Inspection History</button>
@@ -156,6 +173,7 @@
         <button class="detail-nav-btn" data-section="documents">Documents</button>
         <button class="detail-nav-btn" data-section="photos">Photos</button>
       </div>
+      <!-- Tab contents -->
       <div class="station-detail-content">
         <div id="overviewSection" class="detail-section active"></div>
         <div id="inspectionHistorySection" class="detail-section"></div>
@@ -164,49 +182,46 @@
         <div id="photosSection" class="detail-section"></div>
       </div>
     </div>
-  </div>
 
-  <!-- ─────────────────────────────────────────────────────────────────────────── -->
-  <!-- “Add Infrastructure” Button & Modal (bottom-left) -->
-  <!-- ─────────────────────────────────────────────────────────────────────────── -->
+  </div> <!-- end .app-container -->
+
+  <!-- ───────────────────────────────────────────────────────────────────────── -->
+  <!-- “Add Infrastructure” Floating Button + Modal                            -->
+  <!-- ───────────────────────────────────────────────────────────────────────── -->
   <button id="btnAddInfra">Add Infrastructure</button>
 
+  <!-- Modal overlay -->
   <div id="addInfraModal">
     <div class="modal-content">
+      <!-- Close icon -->
       <span class="close-modal">&times;</span>
       <div class="modal-header">Add Infrastructure</div>
 
-      <!-- Step 1: Choose or Add Location -->
+      <!-- Step 1: choose or add a Location -->
       <label for="selectLocation">Location (Province / Region)</label>
       <select id="selectLocation"></select>
       <label for="inputNewLocation">Or type new location:</label>
       <input type="text" id="inputNewLocation" placeholder="e.g. BC or AB" />
       <button id="btnSaveLocation">Save Location</button>
 
-      <!-- Step 2: Asset Type (hidden until a Location is selected) -->
+      <!-- Step 2: choose or add an Asset Type (shown after location) -->
       <div id="assetTypeContainer" style="display:none; margin-top:20px;">
         <label for="selectAssetType">Asset Type (Category)</label>
         <select id="selectAssetType"></select>
-
         <label for="inputNewAssetType">Or type new asset type:</label>
         <input type="text" id="inputNewAssetType" placeholder="e.g. cableway BC" />
         <button id="btnSaveAssetType">Save Asset Type</button>
       </div>
 
-
-      <!-- Step 3: General Information Form (hidden until both chosen) -->
+      <!-- Step 3: general info form (shown after both chosen) -->
       <div id="generalInfoForm" style="display:none; margin-top:20px;">
         <h4>General Information</h4>
         <label for="inputStationId">Station ID (unique)</label>
         <input type="text" id="inputStationId" placeholder="e.g. 05AA008" />
-
         <label for="inputSiteName">Site Name</label>
         <input type="text" id="inputSiteName" />
-
-        <!-- REPLACED Province → Status here: -->
         <label for="inputStatus">Status</label>
         <input type="text" id="inputStatus" placeholder="e.g. ACTIVE" />
-
         <label for="selectRepairRanking">Repair Ranking</label>
         <select id="selectRepairRanking">
           <option value="">-- Select Ranking --</option>
@@ -216,66 +231,60 @@
           <option value="4">4</option>
           <option value="5">5</option>
         </select>
-
         <label for="inputLatitude">Latitude</label>
         <input type="text" id="inputLatitude" placeholder="e.g. 54.12345" />
-
         <label for="inputLongitude">Longitude</label>
         <input type="text" id="inputLongitude" placeholder="e.g. -121.54321" />
-
         <button id="btnSaveGeneralInfo">Save General Info</button>
       </div>
 
-      <!-- Step 4: Add extra sections/dynamic fields (hidden until after general info) -->
+      <!-- Step 4: dynamic extra sections (shown after general info) -->
       <div id="extraSectionsContainer" style="display:none; margin-top:20px;">
         <button id="btnAddSection">+ Add New Section</button>
-        <!-- Dynamically inserted .section-container elements go here -->
+        <!-- new .section-container elements go here -->
       </div>
 
+      <!-- Final save button + message -->
       <button id="btnCreateStation" style="display:none; margin-top:20px;">Save Infrastructure</button>
       <div id="createStationMessage" style="margin-top:10px; color:red;"></div>
-    
+
       <hr />
 
+      <!-- Bulk import from Excel -->
       <h4>Bulk Import from Excel</h4>
-
       <button id="btnChooseExcel">Choose .xlsx file…</button>
       <span id="chosenExcelName" style="margin-left:8px; font-style:italic;"></span>
-
       <div id="sheetSelectContainer" style="display:none; margin-top:10px;">
         <label for="selectSheet">Select worksheet</label>
         <select id="selectSheet"></select>
         <button id="btnImportSheet" disabled>Import sheet</button>
       </div>
-
       <div id="importSummary" style="margin-top:10px; color:#007700;"></div>
-
-    
     </div>
   </div>
 
-  <!-- Leaflet JS -->
+  <!-- Leaflet JS from CDN (map engine) -->
   <script
     src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
     crossorigin=""
   ></script>
-  <!-- Our custom renderer script -->
+  <!-- Application logic -->
   <script src="renderer.js"></script>
 
-  <div id="toast" class="hidden"></div>
+  <!-- Alert placeholder (used for notifications) -->
+  <div id="alert" class="hidden"></div>
 
-  <button
-    id="btnDestroyData"
-    title="Click 3 Times to NUKE and delete everything"
-    >
-  </button>
+  <!-- Nuke-data button (hidden corner) -->
+  <button id="btnDestroyData" title="Click 3 Times to NUKE and delete everything"></button>
   <style>
+    /* Styling for the tiny “nuke” button in the corner */
     #btnDestroyData {
       position: absolute;
       bottom: 10px;
       right: 10px;
-      width: 20px; height: 20px;
+      width: 20px;
+      height: 20px;
       background: red;
       border: none;
       border-radius: 50%;

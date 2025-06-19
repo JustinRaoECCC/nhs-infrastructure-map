@@ -1,6 +1,5 @@
 /* style.css */
 
-
 /* ───────────────────────────────────────────────────────────────────────── */
 /* Global reset + font                                                   */
 /* ───────────────────────────────────────────────────────────────────────── */
@@ -563,10 +562,10 @@ body, html {
 }
 
 /* ───────────────────────────────────────────────────────────────────────── */
-/* Toast notification element                                              */
+/* Alert notification element                                              */
 /* ───────────────────────────────────────────────────────────────────────── */
-/* Centered, red error toast for feedback */
-#toast {
+/* Centered, red error alert for feedback */
+#alert {
   position: fixed;
   top: 50%;
   left: 50%;
