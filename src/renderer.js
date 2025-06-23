@@ -2138,6 +2138,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   const btnCreateStation       = document.getElementById('btnCreateStation');
   const createStationMessage   = document.getElementById('createStationMessage');
 
+  // For repair info
+  const repairInfoContainer = document.getElementById('modalRepairInfoContainer');
+  const inputRepairRanking  = document.getElementById('inputRepairRanking');
+  const inputRepairCost     = document.getElementById('inputRepairCost');
+  const inputFrequency      = document.getElementById('inputFrequency');
+  const btnSaveRepairInfo   = document.getElementById('btnSaveRepairInfo');
+  const repairInfoMessage   = document.getElementById('repairInfoMessage');
+
   // In‐memory caches
   let allLocations        = [];
   let allAssetTypes       = [];
@@ -2224,7 +2232,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
 
-  // Save General Info → basic validation and reveal extra sections
+  // Save General Info → basic validation and then show Repair Info inputs
   btnSaveGeneralInfo.addEventListener('click', () => {
     const stnId = inputStationId.value.trim();
     if (!stnId) {
@@ -2241,13 +2249,47 @@ document.addEventListener('DOMContentLoaded', async () => {
       showAlert('Latitude and Longitude must be valid numbers.');
       return;
     }
-    modalExtraSectionsContainer.style.display = 'block';
-    btnCreateStation.style.display = 'inline-block';
-    createStationMessage.textContent = '';
+
+    // hide general save so they can't click twice
+    btnSaveGeneralInfo.style.display = 'none';
+
+    // reveal Repair Info section
+    modalRepairInfoContainer.style.display = 'block';
+    btnSaveRepairInfo.style.display   = 'inline-block';
+    repairInfoMessage.textContent      = '';
   });
 
-  // ────────────────────────────────────────────────────────────────────────────
-  // ─── **THIS BLOCK MUST BE PRESENT** ───────────────────────────────────────
+  // Save Repair Info → validate and then reveal Sections + Final Save
+  btnSaveRepairInfo.addEventListener('click', () => {
+    // grab & validate repair inputs
+    const rr = inputRepairRanking.value.trim();
+    const rc = inputRepairCost.value.trim();
+    const fq = inputFrequency.value.trim();
+
+    // repair ranking can be blank or integer
+    if (rr && isNaN(parseInt(rr, 10))) {
+      showAlert('Repair Ranking must be a whole number.');
+      return;
+    }
+
+    // cost must be blank or a valid float
+    if (rc && isNaN(parseFloat(rc))) {
+      showAlert('Repair Cost ($) must be a valid number.');
+      return;
+    }
+
+    // hide repair‐info inputs now that they’re “saved”
+    modalRepairInfoContainer.style.display = 'none';
+    btnSaveRepairInfo.style.display        = 'none';
+
+    // reveal extra sections and final Save button
+    modalExtraSectionsContainer.style.display = 'block';
+    btnAddSectionModal.style.display          = 'inline-block';
+    btnCreateStation.style.display            = 'inline-block';
+    createStationMessage.textContent          = '';
+  });
+
+
   // Save a new location if typed, preserving asset type selection
   btnSaveLocation.addEventListener('click', async () => {
     const newLoc = inputNewLocation.value.trim();
@@ -2466,25 +2508,50 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     try {
+      // 1) Persist the new station row
       const res = await window.electronAPI.createNewStation(stationObject);
-      if (res.success) {
-        showSuccess('Infrastructure created successfully!', 2000);
-        closeModal();
-
-        // Reload everything
-        await loadDataAndInitialize();
-
-        if (isListViewActive) {
-          isListViewActive = false;
-          listViewContainer.classList.add('hidden');
-          mapContainer.classList.remove('hidden');
-        }
-        updateMapDisplay();
-
-        existingStationIDs.add(stationId);
-      } else {
+      if (!res.success) {
         createStationMessage.textContent = `Error: ${res.message}`;
+        return;
       }
+
+      // 2) Seed initial repair record if any Repair Info was filled
+      const rrVal = inputRepairRanking.value.trim();
+      const rcVal = inputRepairCost.value.trim();
+      const fqVal = inputFrequency.value.trim();
+      // Validate Repair Ranking (blank or integer)
+      if (rrVal && isNaN(parseInt(rrVal, 10))) {
+        showAlert('Repair Ranking must be a whole number.');
+        return;
+      }
+      // Validate Repair Cost ($) (blank or float)
+      if (rcVal && isNaN(parseFloat(rcVal))) {
+        showAlert('Repair Cost ($) must be a valid number.');
+        return;
+      }
+      // If any of the three fields is non-empty, append one repair record
+      if (rrVal || rcVal || fqVal) {
+        const initialRep = {
+          ranking: rrVal ? parseInt(rrVal, 10) : 0,
+          cost:     rcVal ? parseFloat(rcVal) : 0,
+          freq:     fqVal || ''
+        };
+        await window.electronAPI.createNewRepair(stationId, initialRep);
+      }
+
+      // 3) Show success, close modal, refresh everything
+      showSuccess('Infrastructure created successfully!', 2000);
+      closeModal();
+
+      await loadDataAndInitialize();
+      if (isListViewActive) {
+        isListViewActive = false;
+        listViewContainer.classList.add('hidden');
+        mapContainer.classList.remove('hidden');
+      }
+      updateMapDisplay();
+      existingStationIDs.add(stationId);
+
     } catch (err) {
       createStationMessage.textContent = `Error: ${err.message}`;
     }

@@ -238,7 +238,23 @@
         <button id="btnSaveGeneralInfo">Save General Info</button>
       </div>
 
-      <!-- Step 4: dynamic extra sections (shown after general info) -->
+      <!-- NEW: Step 3b: Repair Info (hidden until Save General Info) -->
+      <div id="modalRepairInfoContainer" style="display:none; margin-top:20px;">
+        <h4>Repair Information</h4>
+        <label for="inputRepairRanking">Repair Ranking</label>
+        <input type="text" id="inputRepairRanking" placeholder="e.g. 3" />
+
+        <label for="inputRepairCost">Repair Cost ($)</label>
+        <input type="text" id="inputRepairCost" placeholder="e.g. 1500" />
+
+        <label for="inputFrequency">Frequency</label>
+        <input type="text" id="inputFrequency" placeholder="e.g. Monthly" />
+
+        <button id="btnSaveRepairInfo">Save Repair Info</button>
+        <div id="repairInfoMessage" style="margin-top:8px; color:red;"></div>
+      </div>
+
+      <!-- Step 4: dynamic extra sections (shown after repair info) -->
       <div id="modalExtraSectionsContainer" style="display:none; margin-top:20px;">
         <button id="btnAddSection">+ Add New Section</button>
         <!-- new .section-container elements go here -->
