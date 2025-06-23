@@ -136,18 +136,11 @@ nhs-infrastructure-map/
 
 
 June 20th, 2025
-- When I created an instance "cableway" at location "ab" and then tried to import in "Cableway AB" from a preexisting, it says:
-"create-new-station error: Error: Worksheet name already exists: AB"
-
-- When I add a section and field to one instance, for some reason it deletes every other section. But then i tested it again, and it wasnt deleted. But it fully deleted all the sections that had arrived due to the import Cableway BC (i also had a section that had been manually added before, and that one didnt get deleted).
-
-* Make the Priority View instantly update after editing a priority ranking
 
 * Impliment Repair Ranking, Repair Cost, Frequency (like where do they pull that data from) --> On the High Priority Repairs page it can be edited and also probably on the Add Infrastructure page
 * Impliment the calculation for determining what should be the order of repairs (Sort by: Repair Priority) -->  Out of 100, it's somthing like x times 0.3 + y times 0.5 + z times 0.2
 
-* Cannot add sections without fields
-
+- "Infrastcuture created successfully" shouldnt be in RED
 
 
 

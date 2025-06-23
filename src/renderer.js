@@ -63,9 +63,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Bulk-import controls
   const btnChooseExcel      = document.getElementById('btnChooseExcel');
   const chosenExcelName     = document.getElementById('chosenExcelName');
-  const sheetSelectContainer= document.getElementById('sheetSelectContainer');
-  const selectSheet         = document.getElementById('selectSheet');
-  const btnImportSheet      = document.getElementById('btnImportSheet');
+  const sheetSelectContainer   = document.getElementById('sheetSelectContainer');
+  const sheetCheckboxContainer = document.getElementById('sheetCheckboxContainer');
+  const btnImportSheets        = document.getElementById('btnImportSheets');
   const importSummary       = document.getElementById('importSummary');
 
   let importFilePath = null;
@@ -364,6 +364,26 @@ document.addEventListener('DOMContentLoaded', async () => {
       console.error("Renderer: Error in loadDataAndInitialize:", err);
       detailsPanelContent.innerHTML = "<p>Error loading station data. Check console.</p>";
     }
+  }
+
+  
+  /** 4.5)
+   * 
+   * Re-populate the Location dropdown with currently-used provinces
+   * (i.e. the sheet names across all asset-type workbooks).
+   */
+  async function updateLocationDropdown() {
+    // 1) Fetch all stations
+    const rawData = await window.electronAPI.getStationData();
+    // 2) Extract the province field from each station
+    const provs = rawData
+      .map(st => st['General Information – Province'] || st.Province || '')
+      .filter(p => p && p.trim())
+      .map(p => p.trim());
+    // 3) Dedupe & sort
+    const unique = Array.from(new Set(provs)).sort();
+    // 4) Rebuild the <select> using your existing helper
+    buildDropdown(selectLocation, unique, 'Select a location');
   }
 
   // ────────────────────────────────────────────────────────────────────────────
@@ -1879,7 +1899,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const inputLatitude          = document.getElementById('inputLatitude');
   const inputLongitude         = document.getElementById('inputLongitude');
   const btnSaveGeneralInfo     = document.getElementById('btnSaveGeneralInfo');
-  const extraSectionsContainer = document.getElementById('extraSectionsContainer');
+  const modalExtraSectionsContainer = document.getElementById('modalExtraSectionsContainer');
   const btnAddSectionModal     = document.getElementById('btnAddSection');
   const btnCreateStation       = document.getElementById('btnCreateStation');
   const createStationMessage   = document.getElementById('createStationMessage');
@@ -1893,7 +1913,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   function openModal()   { addInfraModal.style.display = 'flex'; }
   function closeModal()  { addInfraModal.style.display = 'none'; resetModal(); }
 
-  btnAddInfra.addEventListener('click', () => openModal());
+  
+  btnAddInfra.addEventListener('click', async () => {
+    // regenerate the location list from live data
+    await updateLocationDropdown();
+
+    // clear any  text
+    importSummary.textContent = '';
+    inputNewLocation.value = '';
+
+    // now show the modal
+    openModal();
+  });
   closeModalBtn.addEventListener('click', () => closeModal());
   addInfraModal.addEventListener('click', e => {
     if (e.target === addInfraModal) {
@@ -1976,7 +2007,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       showAlert('Latitude and Longitude must be valid numbers.');
       return;
     }
-    extraSectionsContainer.style.display = 'block';
+    modalExtraSectionsContainer.style.display = 'block';
     btnCreateStation.style.display = 'inline-block';
     createStationMessage.textContent = '';
   });
@@ -2024,7 +2055,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       generalInfoForm.style.display = 'block';
     } else {
       generalInfoForm.style.display = 'none';
-      extraSectionsContainer.style.display = 'none';
+      modalExtraSectionsContainer.style.display = 'none';
       btnCreateStation.style.display = 'none';
     }
   }
@@ -2122,7 +2153,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   btnAddSectionModal.addEventListener('click', () => {
     const newSectionEl = createSectionElement();
-    extraSectionsContainer.insertBefore(newSectionEl, btnAddSectionModal);
+    modalExtraSectionsContainer.insertBefore(newSectionEl, btnAddSectionModal);
   });
 
   // ────────────────────────────────────────────────────────────────────────────
@@ -2131,7 +2162,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   btnCreateStation.addEventListener('click', async () => {
 
     // ─── 0) Validate that each section has ≥1 field and no blank names/values ─────────
-    const sectionEls = extraSectionsContainer.querySelectorAll('.section-container');
+    const sectionEls = modalExtraSectionsContainer.querySelectorAll('.section-container');
     for (const secEl of sectionEls) {
       const rows = secEl.querySelectorAll('.field-row');
       // 0a) ensure at least one field
@@ -2167,9 +2198,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Gather extra sections specified by user in modal
     const allSections = {};
-    const sectionContainers = extraSectionsContainer.querySelectorAll('.section-container');
+    const sectionContainers = modalExtraSectionsContainer.querySelectorAll('.section-container');
     for (const secEl of sectionContainers) {
       const secTitle = secEl.querySelector('.section-title-input').value.trim();
+
       if (!secTitle) {
         createStationMessage.textContent = 'Every section must have a name.';
         return;
@@ -2236,8 +2268,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     inputStatus.value = '';
     inputLatitude.value = '';
     inputLongitude.value = '';
-    extraSectionsContainer.style.display = 'none';
-    const existingSecEls = extraSectionsContainer.querySelectorAll('.section-container');
+    modalExtraSectionsContainer.style.display = 'none';
+    const existingSecEls = modalExtraSectionsContainer.querySelectorAll('.section-container');
     existingSecEls.forEach(el => el.remove());
     btnCreateStation.style.display = 'none';
     createStationMessage.textContent = '';
@@ -2245,9 +2277,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // bulk-import reset
     importFilePath           = null;
     chosenExcelName.textContent = '';
-    sheetSelectContainer.style.display = 'none';
-    selectSheet.innerHTML    = '';
-    btnImportSheet.disabled  = true;
+    sheetSelectContainer.style.display     = 'none';
+    sheetCheckboxContainer.innerHTML       = '';
+    btnImportSheets.disabled               = true;
     importSummary.textContent= '';
   }
 
@@ -2286,69 +2318,99 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 
   // 1️⃣  Pick an Excel file
-btnChooseExcel.addEventListener('click', async () => {
-  const res = await window.electronAPI.chooseExcelFile();
-  if (!res.canceled && res.filePath) {
-    importFilePath                 = res.filePath;
-    chosenExcelName.textContent = res.filePath.split(/[\\/]/).pop();
-    importSummary.textContent      = '';
-
-    // ask main for sheet names
-    const sheetsRes = await window.electronAPI.getExcelSheetNames(importFilePath);
-    if (sheetsRes.success) {
-      // populate dropdown
-      selectSheet.innerHTML = '';
-      sheetsRes.sheets.forEach(name => {
-        const opt = document.createElement('option');
-        opt.value = opt.textContent = name;
-        selectSheet.appendChild(opt);
-      });
-      sheetSelectContainer.style.display = 'block';
-      btnImportSheet.disabled = false;
-    } else {
-      showAlert('Could not read workbook: ' + sheetsRes.message);
+  btnChooseExcel.addEventListener('click', async () => {
+    const res = await window.electronAPI.chooseExcelFile();
+    if (!res.canceled && res.filePath) {
+      // 1) store the path & update UI
+      importFilePath = res.filePath;
+      chosenExcelName.textContent = res.filePath.split(/[\\/]/).pop();
+      importSummary.textContent = '';
+      
+      // 2) ask main for sheet names
+      const sheetsRes = await window.electronAPI.getExcelSheetNames(importFilePath);
+      if (sheetsRes.success) {
+        // 3) populate the checkbox list
+        sheetCheckboxContainer.innerHTML = '';
+        sheetsRes.sheets.forEach(name => {
+          const lbl = document.createElement('label');
+          lbl.style.display = 'block';
+          lbl.style.marginBottom = '4px';
+          
+          const cb = document.createElement('input');
+          cb.type  = 'checkbox';
+          cb.value = name;
+          cb.style.marginRight = '6px';
+          lbl.appendChild(cb);
+          
+          lbl.appendChild(document.createTextNode(name));
+          sheetCheckboxContainer.appendChild(lbl);
+        });
+        
+        // 4) show the container & enable import
+        sheetSelectContainer.style.display = 'block';
+        btnImportSheets.disabled = false;
+      } else {
+        showAlert('Could not read workbook: ' + sheetsRes.message);
+      }
     }
-  }
-});
-
-// 2️⃣  Import selected sheet
-btnImportSheet.addEventListener('click', async () => {
-  
-  console.log('🔥 Import button clicked', {
-    importFilePath,
-    sheetName: selectSheet.value
   });
-  if (!importFilePath) {
-    console.warn('No file chosen yet – importFilePath is null');
-    return;
-  }
-  
-  btnImportSheet.disabled = true;
-  importSummary.textContent = 'Importing…';
 
-  const sheetName = selectSheet.value;
-  const res = await window.electronAPI.importStationsFromExcel(importFilePath, sheetName);
+  // 2️⃣  Import selected sheet
+  btnImportSheets.addEventListener('click', async () => {
+    if (!importFilePath) return;
 
-  if (res.success) {
-    importSummary.style.color = '#007700';
-    importSummary.textContent =
-      `✅ Imported ${res.imported} station(s). ` +
-      (res.duplicates.length ? `${res.duplicates.length} duplicate ID(s) skipped.` : '');
-    await loadDataAndInitialize();     // refresh map/list
+    // 1) collect all checked sheet names
+    const checked = Array.from(
+      sheetCheckboxContainer.querySelectorAll('input[type="checkbox"]:checked')
+    ).map(cb => cb.value);
 
-    // ─── Refresh the Location & Asset-Type dropdowns at once
+    if (checked.length === 0) {
+      importSummary.style.color = '#cc0000';
+      importSummary.textContent = '❌ Please select at least one worksheet.';
+      return;
+    }
+
+    btnImportSheets.disabled = true;
+    importSummary.style.color = '';
+    importSummary.textContent = 'Importing…';
+
+    // 2) import each sheet in turn
+    let totalImported = 0;
+    const allDuplicates = [];
+    const allErrors = [];
+
+    for (const sheetName of checked) {
+      try {
+        const res = await window.electronAPI.importStationsFromExcel(importFilePath, sheetName);
+        if (res.success) {
+          totalImported += res.imported || 0;
+          if (res.duplicates?.length) allDuplicates.push(...res.duplicates);
+          if (res.errors?.length)     allErrors.push(...res.errors);
+        } else {
+          allErrors.push({ sheet: sheetName, message: res.message });
+        }
+      } catch (err) {
+        allErrors.push({ sheet: sheetName, message: err.message });
+      }
+    }
+
+    // 3) build & show summary
+    const parts = [`✅ Imported ${totalImported} station(s).`];
+    if (allDuplicates.length) parts.push(`⚠️ ${allDuplicates.length} duplicate ID(s) skipped.`);
+    if (allErrors.length)     parts.push(`❌ ${allErrors.length} error(s).`);
+
+    importSummary.style.color = allErrors.length ? '#cc0000' : '#007700';
+    importSummary.textContent = parts.join(' ');
+
+    // 4) refresh UI & close modal
+    await loadDataAndInitialize();
+    await updateLocationDropdown();
+    closeModal();
     await loadLookups();
     await loadExistingStationIDs();
 
-  } else {
-    importSummary.style.color = '#cc0000';
-    importSummary.textContent = '❌ ' + res.message;
-  }
-  btnImportSheet.disabled = false;
-});
-
-
-
+    btnImportSheets.disabled = false;
+  });
 
 
 }); // end DOMContentLoaded

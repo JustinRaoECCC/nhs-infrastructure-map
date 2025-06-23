@@ -296,30 +296,33 @@ async function createNewStationInternal(stationObject) {
     }
     await wb2.xlsx.readFile(dataPath);
 
-   // 3) Ensure the province sheet exists (create if missing)
+    // 3) Ensure the province sheet exists (create if missing)
     const province = stationObject.generalInfo.province;
-    let ws = wb2.getWorksheet(province);
+    // Try exact match, otherwise do a case‐insensitive lookup
+    let ws =
+      wb2.getWorksheet(province) ||
+      wb2.worksheets.find(sheet => sheet.name.toLowerCase() === province.toLowerCase());
+
     if (!ws) {
-      
       ws = wb2.addWorksheet(province);
 
       // Header row 1: merged title
       ws.mergeCells('A1:H1');
       ws.getCell('A1').value = 'General Information';
-      ws.getCell('A1').alignment = { horizontal:'center', vertical:'middle' };
-      ws.getCell('A1').font = { bold:true };
+      ws.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' };
+      ws.getCell('A1').font = { bold: true };
 
       // Header row 2: core column names
       const cols = [
-        'Station ID','Asset Type','Site Name',
-        'Province','Latitude','Longitude',
-        'Status','Repair Ranking'
+        'Station ID', 'Asset Type', 'Site Name',
+        'Province', 'Latitude', 'Longitude',
+        'Status', 'Repair Ranking'
       ];
       cols.forEach((hdr, i) => {
         const cell = ws.getRow(2).getCell(i + 1);
         cell.value = hdr;
-        cell.font = { bold:true };
-        cell.alignment = { horizontal:'left', vertical:'middle' };
+        cell.font = { bold: true };
+        cell.alignment = { horizontal: 'left', vertical: 'middle' };
       });
 
       // persist new sheet/page
@@ -628,12 +631,12 @@ ipcMain.handle('save-station-data', async (_event, updatedStation) => {
         wbOld.worksheets.forEach(ws => {
           // locate Station ID column in row 2
           const hdrs = [];
-          ws.getRow(2).eachCell((c,i) => hdrs[i-1] = String(c.value||'').trim());
+          ws.getRow(2).eachCell((c, i) => hdrs[i - 1] = String(c.value || '').trim());
           const idCol = hdrs.indexOf('Station ID') + 1;
           if (!idCol) return;
           // splice out the matching row
           for (let r = 3; r <= ws.rowCount; r++) {
-            if (String(ws.getRow(r).getCell(idCol).value||'').trim() === stationId) {
+            if (String(ws.getRow(r).getCell(idCol).value || '').trim() === stationId) {
               ws.spliceRows(r, 1);
               removed = true;
               break;
@@ -653,81 +656,108 @@ ipcMain.handle('save-station-data', async (_event, updatedStation) => {
     const wbNew = new ExcelJS.Workbook();
     await wbNew.xlsx.readFile(newPath);
 
-    // 4) Prepare header sync: core vs. dynamic keys
-    // Core
+    // 4) Figure out exactly which dynamic headers existed before we make any changes
+    const sheet0 = wbNew.worksheets[0];
+    const beforeHeaders = sheet0.getRow(2)
+                          .values
+                          .slice(1)            // drop the dummy 0-index
+                          .map(v => String(v).trim())
+                          .filter(v => v);
     const CORE = new Set([
       'Station ID','Asset Type','Site Name',
       'Province','Latitude','Longitude',
       'Status','Repair Ranking'
     ]);
-    // Dynamic
+    // everything not in CORE is “dynamic”
+    const beforeDynamic = beforeHeaders.filter(h => !CORE.has(h));
+    
+
     const allKeys = Object.keys(updatedStation).filter(k =>
       ![
-        'stationId','stationName','latitude','longitude',
-        'category','Category'
+        'stationId', 'stationName', 'latitude', 'longitude',
+        'category', 'Category'
       ].includes(k)
     );
     const targetHeaders = Array.from(new Set([ ...CORE, ...allKeys ]));
 
     // 5) Sync headers across every sheet: drop extras, add missing
     wbNew.worksheets.forEach(ws => {
-      const existing = [];
-      ws.getRow(2).eachCell((c,i) => {
-        const v = String(c.value||'').trim();
-        existing[i-1] = v || null;
-      });
-      // remove unwanted columns
-      for (let i = existing.length - 1; i >= 0; i--) {
-        const h = existing[i];
-        if (h && !CORE.has(h) && !allKeys.includes(h)) {
-          ws.spliceColumns(i+1, 1);
-          existing.splice(i,1);
-        }
-      }
-      // add missing columns at the end
+
+      // 5a) Remove only the dynamic columns the user actually deleted:
+      const toDelete = beforeDynamic.filter(hdr => !allKeys.includes(hdr));
+      toDelete
+      .map(hdr => beforeHeaders.indexOf(hdr))
+        .filter(idx => idx >= 0)
+        .sort((a, b) => b - a)   // highest index first
+        .forEach(idx => {
+          ws.spliceColumns(idx + 1, 1);
+        });
+  
+      // 5b) Re-read the *current* headers from row 2
+      let currentHeaders = ws.getRow(2)
+                            .values
+                            .slice(1)
+                            .map(v => String(v || '').trim());
+
+      // 5c) Append any that are still missing
       targetHeaders.forEach(hdr => {
-        if (!existing.includes(hdr)) {
-          const col = existing.length + 1;
-          ws.spliceColumns(col, 0, []);
-          const cell = ws.getRow(2).getCell(col);
-          cell.value = hdr;
-          cell.font = { bold: true };
-          cell.alignment = { horizontal:'left', vertical:'middle' };
-          existing.push(hdr);
+        if (!currentHeaders.includes(hdr)) {
+          const colIdx = currentHeaders.length + 1;
+          ws.spliceColumns(colIdx, 0, []);
+          const cell = ws.getRow(2).getCell(colIdx);
+          cell.value     = hdr;
+          cell.font      = { bold: true };
+          cell.alignment = { horizontal: 'left', vertical: 'middle' };
+          currentHeaders.push(hdr);
         }
       });
     });
-    // 6) Ensure the province sheet exists and has headers
-    let wsTarget = wbNew.getWorksheet(newProv);
+
+
+
+
+    // 6) Ensure the province sheet exists (create if missing)
+    // Try exact match first, else case-insensitive
+    let wsTarget =
+      wbNew.getWorksheet(newProv) ||
+      wbNew.worksheets.find(sheet => sheet.name.toLowerCase() === newProv.toLowerCase());
+
     if (!wsTarget) {
       wsTarget = wbNew.addWorksheet(newProv);
-      // core two‐line header
+
+      // Header row 1: merged title
       wsTarget.mergeCells('A1:H1');
-      wsTarget.getCell('A1').value = 'General Information';
-      wsTarget.getCell('A1').alignment = { horizontal:'center', vertical:'middle' };
-      wsTarget.getCell('A1').font = { bold:true };
-      // row 2: core headers
-      ['Station ID','Asset Type','Site Name','Province','Latitude','Longitude','Status','Repair Ranking']
-        .forEach((h,i) => {
-          const c = wsTarget.getRow(2).getCell(i+1);
-          c.value = h;
-          c.font = { bold:true };
-          c.alignment = { horizontal:'left', vertical:'middle' };
-        });
+      wsTarget.getCell('A1').value     = 'General Information';
+      wsTarget.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' };
+      wsTarget.getCell('A1').font      = { bold: true };
+
+      // Header row 2: core column names
+      const coreCols = [
+        'Station ID', 'Asset Type', 'Site Name',
+        'Province', 'Latitude', 'Longitude',
+        'Status', 'Repair Ranking'
+      ];
+      coreCols.forEach((hdr, i) => {
+        const cell = wsTarget.getRow(2).getCell(i + 1);
+        cell.value     = hdr;
+        cell.font      = { bold: true };
+        cell.alignment = { horizontal: 'left', vertical: 'middle' };
+      });
+
       // inject dynamic headers too
       const post = [];
-      wsTarget.getRow(2).eachCell((c,i) => {
-        const v = String(c.value||'').trim();
-        post[i-1] = v || null;
+      wsTarget.getRow(2).eachCell((c, i) => {
+        const v = String(c.value || '').trim();
+        post[i - 1] = v || null;
       });
       targetHeaders.forEach(hdr => {
         if (!post.includes(hdr)) {
           const col = post.length + 1;
           wsTarget.spliceColumns(col, 0, []);
           const cell = wsTarget.getRow(2).getCell(col);
-          cell.value = hdr;
-          cell.font = { bold:true };
-          cell.alignment = { horizontal:'left', vertical:'middle' };
+          cell.value     = hdr;
+          cell.font      = { bold: true };
+          cell.alignment = { horizontal: 'left', vertical: 'middle' };
           post.push(hdr);
         }
       });
@@ -735,23 +765,22 @@ ipcMain.handle('save-station-data', async (_event, updatedStation) => {
 
     // 7) Build header→column index map
     const headerMap = {};
-    wsTarget.getRow(2).eachCell((c,i) => {
-      const v = String(c.value||'').trim();
+    wsTarget.getRow(2).eachCell((c, i) => {
+      const v = String(c.value || '').trim();
       if (v) headerMap[v] = i;
     });
 
     // 8) Append the updated station row
     const row = wsTarget.getRow(wsTarget.rowCount + 1);
-    // core fields
-    row.getCell(headerMap['Station ID']).value = stationId;
-    row.getCell(headerMap['Asset Type']).value = newAt;
-    row.getCell(headerMap['Site Name']).value = updatedStation['Site Name'] || updatedStation.stationName;
-    row.getCell(headerMap['Province']).value = newProv;
-    row.getCell(headerMap['Latitude']).value = Number(updatedStation.Latitude || updatedStation.latitude);
-    row.getCell(headerMap['Longitude']).value = Number(updatedStation.Longitude || updatedStation.longitude);
-    row.getCell(headerMap['Status']).value = updatedStation.Status;
+    row.getCell(headerMap['Station ID']).value     = stationId;
+    row.getCell(headerMap['Asset Type']).value     = newAt;
+    row.getCell(headerMap['Site Name']).value      = updatedStation['Site Name'] || updatedStation.stationName;
+    row.getCell(headerMap['Province']).value       = newProv;
+    row.getCell(headerMap['Latitude']).value       = Number(updatedStation.Latitude  || updatedStation.latitude);
+    row.getCell(headerMap['Longitude']).value      = Number(updatedStation.Longitude || updatedStation.longitude);
+    row.getCell(headerMap['Status']).value         = updatedStation.Status;
     row.getCell(headerMap['Repair Ranking']).value = updatedStation['Repair Ranking'];
-    // dynamic fields
+
     allKeys.forEach(key => {
       const idx = headerMap[key];
       if (idx) row.getCell(idx).value = updatedStation[key] || '';
@@ -767,6 +796,7 @@ ipcMain.handle('save-station-data', async (_event, updatedStation) => {
     return { success: false, message: err.message };
   }
 });
+
 
 
 /**

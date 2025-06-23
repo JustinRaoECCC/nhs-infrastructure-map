@@ -239,7 +239,7 @@
       </div>
 
       <!-- Step 4: dynamic extra sections (shown after general info) -->
-      <div id="extraSectionsContainer" style="display:none; margin-top:20px;">
+      <div id="modalExtraSectionsContainer" style="display:none; margin-top:20px;">
         <button id="btnAddSection">+ Add New Section</button>
         <!-- new .section-container elements go here -->
       </div>
@@ -255,9 +255,14 @@
       <button id="btnChooseExcel">Choose .xlsx file…</button>
       <span id="chosenExcelName" style="margin-left:8px; font-style:italic;"></span>
       <div id="sheetSelectContainer" style="display:none; margin-top:10px;">
-        <label for="selectSheet">Select worksheet</label>
-        <select id="selectSheet"></select>
-        <button id="btnImportSheet" disabled>Import sheet</button>
+        <label>Select worksheets to import:</label>
+        <div id="sheetCheckboxContainer"
+            style="max-height:150px; overflow:auto; border:1px solid #ccc; padding:8px; margin-top:4px;">
+          <!-- JS will inject one <label><input type="checkbox" …> sheetName</label> per sheet -->
+        </div>
+        <button id="btnImportSheets" disabled style="margin-top:8px;">
+          Import Sheets
+        </button>
       </div>
       <div id="importSummary" style="margin-top:10px; color:#007700;"></div>
     </div>
