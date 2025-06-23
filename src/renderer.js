@@ -150,23 +150,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 
 
-
-  // Coordinates for the secret button:
-  const SECRET_LAT = 59.432838; 
-  const SECRET_LNG = -146.328343;
-
-  // Create an invisible marker
-  const secretMarker = L.marker([SECRET_LAT, SECRET_LNG], {
-    opacity: 0,           // fully transparent
-    interactive: true     // still catches clicks
-  }).addTo(map);
-
-  // When clicked, ask the main process to open Pong
-  secretMarker.on('click', () => {
-    window.electronAPI.openPong();
-  });
-
-
   // Helper for displaaying error message
   function showAlert(msg, duration=1000) {
     const t = document.getElementById('alert');

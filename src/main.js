@@ -1307,22 +1307,6 @@ ipcMain.handle('save-color', async (_e, category, province, color) => {
   return { success: true };
 });
 
-// This is not part of the program (pong.html is needed in the data project directory to use this piece of code)
-ipcMain.on('open-pong', () => {
-  const gameFile = path.join(DATA_DIR, 'pong.html');
-  const games = [ gameFile ];
-  const chosen = games[Math.floor(Math.random() * games.length)];
-  const pongWin = new BrowserWindow({
-    width: 1200, height: 800, title: 'Secret Game',
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      contextIsolation: true,
-      nodeIntegration: false
-    }
-  });
-  pongWin.loadFile(chosen);
-});
-
 const REPAIRS_DIR = path.join(DATA_DIR, 'repairs');
 
 // Ensure the repairs directory exists

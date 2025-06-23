@@ -49,8 +49,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   addNewAssetType:      (atype) => ipcRenderer.invoke('add-new-asset-type', atype),
   // Create a brand-new station record in the appropriate workbook
   createNewStation:     (stationObj) => ipcRenderer.invoke('create-new-station', stationObj),
-  // Launch the hidden Pong Easter egg game
-  openPong:             () => ipcRenderer.send('open-pong'),
 
   // ────────────────────────────────────────────────────────────────────────────
   // Data Destruction (“Nuke”) Button
