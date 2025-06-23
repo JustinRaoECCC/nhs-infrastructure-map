@@ -137,9 +137,9 @@ nhs-infrastructure-map/
 
 June 20th, 2025
 
+* Enforce repair cost must be a number, and rename it to "Repair Cost ($)"
 
 
-* Impliment Repair Ranking, Repair Cost, Frequency (like where do they pull that data from) --> On the High Priority Repairs page it can be edited and also probably on the Add Infrastructure page
 * Impliment the calculation for determining what should be the order of repairs (Sort by: Repair Priority) -->  Out of 100, it's somthing like x times 0.3 + y times 0.5 + z times 0.2
 
 

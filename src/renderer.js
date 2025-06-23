@@ -961,6 +961,50 @@ document.addEventListener('DOMContentLoaded', async () => {
     detailsPanelContent.appendChild(generalSectionDiv);
 
     // ─────────────────────────────────────────────────────────────────────────────
+    // 2) READ-ONLY “Repair Information” box
+    // ─────────────────────────────────────────────────────────────────────────────
+    const repairSectionDiv = document.createElement('div');
+    repairSectionDiv.classList.add('quick-section');
+    repairSectionDiv.style.border = '1px solid #ccc';
+    repairSectionDiv.style.padding = '8px';
+    repairSectionDiv.style.marginBottom = '10px';
+    repairSectionDiv.dataset.sectionName = 'Repair Information';
+
+    const repairTitle = document.createElement('div');
+    repairTitle.style.fontWeight = 'bold';
+    repairTitle.textContent = 'Repair Information';
+    repairSectionDiv.appendChild(repairTitle);
+
+    // helper to add a read-only field
+    function addRepairField(labelText, value) {
+      const rowDiv = document.createElement('div');
+      rowDiv.style.display = 'flex';
+      rowDiv.style.marginTop = '4px';
+      rowDiv.style.alignItems = 'center';
+
+      const label = document.createElement('label');
+      label.textContent = `${labelText}:`;
+      label.style.flex = '0 0 140px';
+      label.style.fontWeight = '600';
+      rowDiv.appendChild(label);
+
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.value = value != null ? String(value) : '';
+      input.disabled = true;
+      input.style.flex = '1';
+      rowDiv.appendChild(input);
+
+      repairSectionDiv.appendChild(rowDiv);
+    }
+
+    addRepairField('Repair Ranking', station['Repair Ranking'] || '');
+    addRepairField('Repair Cost',    station['Repair Cost']    || '');
+    addRepairField('Frequency',      station['Frequency']      || '');
+
+    detailsPanelContent.appendChild(repairSectionDiv);
+
+    // ─────────────────────────────────────────────────────────────────────────────
     // 2) READ-ONLY “Extra Sections” (if any)
     // ─────────────────────────────────────────────────────────────────────────────
     const sectionsMap = buildSectionsMapFromExcelHeadersAndData(
@@ -1576,6 +1620,39 @@ document.addEventListener('DOMContentLoaded', async () => {
         { fieldName: 'Frequency',      fullKey: `repairs[${idx}].freq`,    value: r.freq    },
       ];
       const block = createQuickSectionBlock(`Repair ${idx + 1}`, entries);
+
+      // remove the "+ Add Field" button inside this block
+      block.querySelectorAll('button')
+          .forEach(btn => { if (btn.textContent.trim() === '+ Add Field') btn.remove(); });
+
+      // remove every little "×" delete‐field button
+      block.querySelectorAll('.quick-field-row button').forEach(btn => btn.remove());
+
+      // swap the Repair Ranking input for a dropdown
+      block.querySelectorAll('.quick-field-row').forEach(row => {
+        const label = row.children[0].value.trim();
+        if (label === 'Repair Ranking') {
+          const oldInput = row.children[1];
+          const select = document.createElement('select');
+          // blank option -> "--"
+          ['',1,2,3,4,5].forEach(v => {
+            const opt = document.createElement('option');
+            opt.value = String(v);
+            opt.textContent = v === '' ? '--' : String(v);
+            select.appendChild(opt);
+          });
+          select.value = String(oldInput.value || '');
+          select.style.flex = oldInput.style.flex;
+          select.style.minWidth   = oldInput.style.minWidth;
+          select.style.marginLeft = oldInput.style.marginLeft;
+          // whenever the user picks a ranking, keep the underlying input in sync
+          select.addEventListener('change', () => {
+            oldInput.value = select.value;
+          });
+          row.replaceChild(select, oldInput);
+        }
+      });
+
       dynContainer.appendChild(block);
     });
 
@@ -1584,14 +1661,46 @@ document.addEventListener('DOMContentLoaded', async () => {
     addBtn.textContent = '+ Add Repair';
     addBtn.style.marginTop = '10px';
     addBtn.addEventListener('click', () => {
-      const idx = dynContainer.children.length;  // zero-based
-      // build the three fixed fields, empty values
+      const idx = dynContainer.children.length;
       const entries = [
-        { fieldName: 'Repair Ranking', fullKey: `repairs[${idx}].ranking`, value: '', readOnlyName: true },
-        { fieldName: 'Repair Cost',    fullKey: `repairs[${idx}].cost`,    value: '', readOnlyName: true },
-        { fieldName: 'Frequency',      fullKey: `repairs[${idx}].freq`,    value: '', readOnlyName: true },
+        { fieldName: 'Repair Ranking', fullKey: `repairs[${idx}].ranking`, value: '' },
+        { fieldName: 'Repair Cost',    fullKey: `repairs[${idx}].cost`,    value: '' },
+        { fieldName: 'Frequency',      fullKey: `repairs[${idx}].freq`,    value: ''   },
       ];
-      const block = createQuickSectionBlock(`Repair ${idx+1}`, entries);
+      const block = createQuickSectionBlock(`Repair ${idx + 1}`, entries);
+
+      // remove "+ Add Field" and the little "×" buttons
+      block.querySelectorAll('button')
+          .forEach(btn => {
+            if (btn.textContent.trim() === '+ Add Field' ||
+                btn.textContent.trim() === '×') {
+              btn.remove();
+            }
+          });
+
+      // replace the Ranking input with a <select> again
+      block.querySelectorAll('.quick-field-row').forEach(row => {
+        const label = row.children[0].value.trim();
+        if (label === 'Repair Ranking') {
+          const oldInput = row.children[1];
+          const select = document.createElement('select');
+          ['',1,2,3,4,5].forEach(v => {
+            const opt = document.createElement('option');
+            opt.value = String(v);
+            opt.textContent = v === '' ? '--' : String(v);
+            select.appendChild(opt);
+          });
+          select.value = '';
+          select.style.flex = oldInput.style.flex;
+          select.style.minWidth   = oldInput.style.minWidth;
+          select.style.marginLeft = oldInput.style.marginLeft;
+          select.addEventListener('change', () => {
+            oldInput.value = select.value;
+          });
+          row.replaceChild(select, oldInput);
+        }
+      });
+
       dynContainer.appendChild(block);
     });
     container.appendChild(addBtn);
@@ -1601,11 +1710,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     saveBtn.textContent = 'Save Repairs';
     saveBtn.style.marginTop = '10px';
     saveBtn.addEventListener('click', async () => {
-      // Collect every section’s fields into objects
+      // wipe out the old .xlsx first
+      await window.electronAPI.deleteStationRepairs(stationId);
+
+      // then append each repair fresh
       const blocks = dynContainer.querySelectorAll('.quick-section');
       for (let i = 0; i < blocks.length; i++) {
-        const sec = blocks[i];
-        const rows = sec.querySelectorAll('.quick-field-row');
+        const rows = blocks[i].querySelectorAll('.quick-field-row');
         const rep = { ranking: 0, cost: 0, freq: '' };
         rows.forEach(row => {
           const key = row.children[0].value.trim();
@@ -1614,14 +1725,41 @@ document.addEventListener('DOMContentLoaded', async () => {
           if (key === 'Repair Cost')    rep.cost    = parseFloat(val)   || 0;
           if (key === 'Frequency')      rep.freq    = val;
         });
-        // append this repair
         await window.electronAPI.createNewRepair(stationId, rep);
       }
-      // re-render to show saved repairs
+
+      // re-render so we never see duplicates
       await renderRepairsSection(container, stationId);
+      await loadDataAndInitialize();      // reloads allStationData
+      updateActiveViewDisplay();         // re-paints map, list or priority view
+
+      
+      // 5) refresh the quick‐view panel if it’s open on this station
+      if (currentEditingStation && currentEditingStation.stationId === stationId) {
+        displayStationDetailsQuickView(
+          allStationData.find(s => s.stationId === stationId)
+        );
+      }
+
+      // show a little green “saved” note
+      const saveMsg = document.getElementById('saveRepairsMessage');
+      saveMsg.textContent   = 'Repairs saved!';
+      saveMsg.style.color   = '#28a745';
+      // clear it after 2s
+      setTimeout(() => saveMsg.textContent = '', 2000);
+
     });
-    container.appendChild(saveBtn);
+    container.appendChild(saveBtn)
+
+    // Saved messagae
+    const msgDiv = document.createElement('div');
+    msgDiv.id = 'saveRepairsMessage';
+    msgDiv.style.marginTop = '8px';
+    container.appendChild(msgDiv);
+
   }
+
+
 
 
 
@@ -1723,6 +1861,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
 
       fld.style.flex = '1';
+      fld.style.minWidth   = '100px';
+      fld.style.marginLeft = '6px';
       fld.addEventListener('change', e => {
         currentEditingStation[key] = e.target.value;
       });

@@ -78,5 +78,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Repair Priority
   createNewRepair:      (stationId, repair) => ipcRenderer.invoke('add-station-repair', stationId, repair),
-  getStationRepairs:    (stationId)          => ipcRenderer.invoke('get-station-repairs', stationId)
+  getStationRepairs:    (stationId)          => ipcRenderer.invoke('get-station-repairs', stationId),
+  deleteStationRepairs: stationId => ipcRenderer.invoke('delete-station-repairs', stationId),
+
 });

@@ -21,7 +21,6 @@ const ExcelJS = require('exceljs');
 // Used for identifying which imported stations are in what province
 const { point, booleanPointInPolygon } = require('@turf/turf');
 
-
 /** 
  * Define the locations/paths where the data infrastructure informaton be stored
  *    .. because main.js is within src, which is on the same level in the project directory as data
@@ -1378,6 +1377,19 @@ ipcMain.handle('add-station-repair', async (_e, stationId, { ranking, cost, freq
   ws.addRow([ranking, cost, freq]);
   await wb.xlsx.writeFile(file);
   return { success: true };
+});
+
+// Delete repair
+ipcMain.handle('delete-station-repairs', async (_evt, stationId) => {
+  const file = path.join(REPAIRS_DIR, `${stationId}_repairs.xlsx`);
+  try {
+    if (await fsPromises.stat(file).then(() => true).catch(() => false)) {
+      await fsPromises.unlink(file);
+    }
+    return { success: true };
+  } catch (err) {
+    return { success: false, message: err.message };
+  }
 });
 
 
