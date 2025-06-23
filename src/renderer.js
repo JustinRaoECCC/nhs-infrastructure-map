@@ -999,7 +999,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     addRepairField('Repair Ranking', station['Repair Ranking'] || '');
-    addRepairField('Repair Cost',    station['Repair Cost']    || '');
+    addRepairField('Repair Cost ($)', station['Repair Cost']   || '');
     addRepairField('Frequency',      station['Frequency']      || '');
 
     detailsPanelContent.appendChild(repairSectionDiv);
@@ -1615,9 +1615,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 3) Render one quick-section per existing repair
     repairs.forEach((r, idx) => {
       const entries = [
-        { fieldName: 'Repair Ranking', fullKey: `repairs[${idx}].ranking`, value: r.ranking },
-        { fieldName: 'Repair Cost',    fullKey: `repairs[${idx}].cost`,    value: r.cost    },
-        { fieldName: 'Frequency',      fullKey: `repairs[${idx}].freq`,    value: r.freq    },
+        { fieldName: 'Repair Ranking',   fullKey: `repairs[${idx}].ranking`, value: r.ranking,   readOnlyName: true },
+        { fieldName: 'Repair Cost ($)',  fullKey: `repairs[${idx}].cost`,    value: r.cost,      readOnlyName: true },
+        { fieldName: 'Frequency',        fullKey: `repairs[${idx}].freq`,    value: r.freq,      readOnlyName: true },
       ];
       const block = createQuickSectionBlock(`Repair ${idx + 1}`, entries);
 
@@ -1663,9 +1663,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     addBtn.addEventListener('click', () => {
       const idx = dynContainer.children.length;
       const entries = [
-        { fieldName: 'Repair Ranking', fullKey: `repairs[${idx}].ranking`, value: '' },
-        { fieldName: 'Repair Cost',    fullKey: `repairs[${idx}].cost`,    value: '' },
-        { fieldName: 'Frequency',      fullKey: `repairs[${idx}].freq`,    value: ''   },
+        { fieldName: 'Repair Ranking',   fullKey: `repairs[${idx}].ranking`, value: '', readOnlyName: true },
+        { fieldName: 'Repair Cost ($)',  fullKey: `repairs[${idx}].cost`,    value: '', readOnlyName: true },
+        { fieldName: 'Frequency',        fullKey: `repairs[${idx}].freq`,    value: '', readOnlyName: true },
+
       ];
       const block = createQuickSectionBlock(`Repair ${idx + 1}`, entries);
 
@@ -1717,14 +1718,27 @@ document.addEventListener('DOMContentLoaded', async () => {
       const blocks = dynContainer.querySelectorAll('.quick-section');
       for (let i = 0; i < blocks.length; i++) {
         const rows = blocks[i].querySelectorAll('.quick-field-row');
+        // build & validate one repair entry
         const rep = { ranking: 0, cost: 0, freq: '' };
-        rows.forEach(row => {
+        for (const row of rows) {
           const key = row.children[0].value.trim();
           const val = row.children[1].value.trim();
-          if (key === 'Repair Ranking') rep.ranking = parseInt(val, 10) || 0;
-          if (key === 'Repair Cost')    rep.cost    = parseFloat(val)   || 0;
-          if (key === 'Frequency')      rep.freq    = val;
-        });
+
+          if (key === 'Repair Ranking') {
+            rep.ranking = parseInt(val, 10) || 0;
+          }
+          else if (key === 'Repair Cost ($)' || key === 'Repair Cost') {
+            const num = parseFloat(val);
+            if (isNaN(num)) {
+              showAlert('Repair Cost must be a valid number.');
+              return;  // abort save
+            }
+            rep.cost = num;
+          }
+          else if (key === 'Frequency') {
+            rep.freq = val;
+          }
+        }
         await window.electronAPI.createNewRepair(stationId, rep);
       }
 
