@@ -137,15 +137,12 @@ nhs-infrastructure-map/
 
 June 20th, 2025
 
+
+
 * Impliment Repair Ranking, Repair Cost, Frequency (like where do they pull that data from) --> On the High Priority Repairs page it can be edited and also probably on the Add Infrastructure page
 * Impliment the calculation for determining what should be the order of repairs (Sort by: Repair Priority) -->  Out of 100, it's somthing like x times 0.3 + y times 0.5 + z times 0.2
 
-- "Infrastcuture created successfully" shouldnt be in RED
 
-
-
-
-* No multi-user concurrency lock beyond in-memory; race conditions possible if multiple instances run.
 * Inactive stations: currently not auto-moved to an `INACTIVE` workbook; requires manual handling.
 * Confirm expected behavior for reactivating stations—should they move back and restore history?
 

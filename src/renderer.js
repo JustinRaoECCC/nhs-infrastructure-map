@@ -175,6 +175,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     setTimeout(() => t.classList.add('hidden'), duration);
   }
 
+  /**
+   * showSuccess(msg, duration):s
+   *  - Displays a green alert (instead of red) in the same #alert box.
+   *  - Reverts back to the default red when hidden.
+   */
+  function showSuccess(msg, duration = 1000) {
+    const t = document.getElementById('alert');
+    t.textContent = msg;
+    // inline‐override to green
+    t.style.background = '#28a745';
+    t.classList.remove('hidden');
+    setTimeout(() => {
+      t.classList.add('hidden');
+      // clear inline style so showAlert (red) works next time
+      t.style.background = '';
+    }, duration);
+  }
+
+
   // normalize raw status into “Active”, “Inactive”, etc.
   function normalizeStatus(raw) {
     if (!raw) return 'Unknown';
@@ -1080,6 +1099,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       const keyInput = document.createElement('input');
       keyInput.type = 'text';
       keyInput.value = entry.fieldName;
+      // if this row is one of our fixed Repair fields, don’t allow renaming it
+      if (entry.readOnlyName) {
+        keyInput.disabled = true;
+      }
       keyInput.placeholder = 'Field name';
       keyInput.style.flex = '1 1 auto';
       keyInput.style.minWidth = '100px';
@@ -1453,13 +1476,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     stationDetailTitle.textContent =
       `${stationFromExcel.stationName || 'N/A'} (${stationFromExcel.stationId || 'N/A'})`;
 
-    // 2) Remember the pre-edit ID for later
+    // 2) Remember the pre-edit ID
     originalEditingStationId = stationFromExcel.stationId;
 
-    // 3) Show “Loading…” until we fetch folder contents
-    Object.values(detailSections).forEach(sec => sec.innerHTML = '<p>Loading...</p>');
+    // 3) Prepare empty "loading..." placeholders
+    Object.values(detailSections).forEach(sec => sec.innerHTML = '<p>Loading…</p>');
     setActiveDetailSection('overview');
 
+    // 4) Fetch folder + overview data
     try {
       const result = await window.electronAPI.getStationFileDetails(
         stationFromExcel.stationId,
@@ -1467,31 +1491,38 @@ document.addEventListener('DOMContentLoaded', async () => {
       );
 
       if (result.success) {
-        // Keep the raw file-detail data for tabs & folders
+        // use the real folder-based contents
         currentStationDetailData = result.data;
-        // Clone into our in-memory editor buffer
         currentEditingStation   = JSON.parse(JSON.stringify(result.data.overview));
-        renderStationDetailPageContent();
       } else {
-        // If folder-lookup fails, fall back to just Excel values
-        Object.values(detailSections).forEach(
-          sec => sec.innerHTML = `<p>Error loading details: ${result.message}</p>`
-        );
-        detailSections.overview.innerHTML = '';
-        renderOverviewSection(stationFromExcel);
-        // Still seed the editor buffer so save() can run
+        // fallback: no folder → just use the Excel overview, empty lists
+        currentStationDetailData = {
+          stationId: stationFromExcel.stationId,
+          overview:  stationFromExcel,
+          inspectionHistory:   [],
+          highPriorityRepairs: [],
+          documents:           [],
+          photos:              []
+        };
         currentEditingStation = { ...stationFromExcel };
       }
     } catch (err) {
-      console.error('Error in openStationDetailPage:', err);
-      Object.values(detailSections).forEach(
-        sec => sec.innerHTML = `<p>Error loading details: ${err.message}</p>`
-      );
-      detailSections.overview.innerHTML = '';
-      renderOverviewSection(stationFromExcel);
+      // on error, same fallback
+      currentStationDetailData = {
+        stationId: stationFromExcel.stationId,
+        overview:  stationFromExcel,
+        inspectionHistory:   [],
+        highPriorityRepairs: [],
+        documents:           [],
+        photos:              []
+      };
       currentEditingStation = { ...stationFromExcel };
     }
+
+    // 5) Now render _all_ tabs using your unified renderer
+    await renderStationDetailPageContent();
   }
+
 
 
   function closeStationDetailPage() {
@@ -1510,7 +1541,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  function renderStationDetailPageContent() {
+  async function renderStationDetailPageContent() {
     if (!currentStationDetailData) return;
     renderOverviewSection(currentEditingStation);
     renderFileListSection(
@@ -1518,14 +1549,81 @@ document.addEventListener('DOMContentLoaded', async () => {
       currentStationDetailData.inspectionHistory,
       "No inspection history found."
     );
-    renderFileListSection(
-      detailSections.highPriorityRepairs,
-      currentStationDetailData.highPriorityRepairs,
-      "No high priority repairs listed."
-    );
+    await renderRepairsSection(detailSections.highPriorityRepairs, currentStationDetailData.stationId);
     renderFileListSection(detailSections.documents, currentStationDetailData.documents, "No documents found.");
     renderPhotoGallerySection(detailSections.photos, currentStationDetailData.photos, "No photos found.");
   }
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // renderRepairsSection — uses the same quick-section UI as Overview.
+  // ────────────────────────────────────────────────────────────────────────────
+  async function renderRepairsSection(container, stationId) {
+    container.innerHTML = '';
+
+    // 1) Fetch the saved repairs from disk
+    const repairs = await window.electronAPI.getStationRepairs(stationId);
+
+    // 2) Container for all repair blocks
+    const dynContainer = document.createElement('div');
+    dynContainer.id = 'repairsSectionsContainer';
+    container.appendChild(dynContainer);
+
+    // 3) Render one quick-section per existing repair
+    repairs.forEach((r, idx) => {
+      const entries = [
+        { fieldName: 'Repair Ranking', fullKey: `repairs[${idx}].ranking`, value: r.ranking },
+        { fieldName: 'Repair Cost',    fullKey: `repairs[${idx}].cost`,    value: r.cost    },
+        { fieldName: 'Frequency',      fullKey: `repairs[${idx}].freq`,    value: r.freq    },
+      ];
+      const block = createQuickSectionBlock(`Repair ${idx + 1}`, entries);
+      dynContainer.appendChild(block);
+    });
+
+    // 4) “+ Add Repair” button
+    const addBtn = document.createElement('button');
+    addBtn.textContent = '+ Add Repair';
+    addBtn.style.marginTop = '10px';
+    addBtn.addEventListener('click', () => {
+      const idx = dynContainer.children.length;  // zero-based
+      // build the three fixed fields, empty values
+      const entries = [
+        { fieldName: 'Repair Ranking', fullKey: `repairs[${idx}].ranking`, value: '', readOnlyName: true },
+        { fieldName: 'Repair Cost',    fullKey: `repairs[${idx}].cost`,    value: '', readOnlyName: true },
+        { fieldName: 'Frequency',      fullKey: `repairs[${idx}].freq`,    value: '', readOnlyName: true },
+      ];
+      const block = createQuickSectionBlock(`Repair ${idx+1}`, entries);
+      dynContainer.appendChild(block);
+    });
+    container.appendChild(addBtn);
+
+    // 5) “Save Repairs” button
+    const saveBtn = document.createElement('button');
+    saveBtn.textContent = 'Save Repairs';
+    saveBtn.style.marginTop = '10px';
+    saveBtn.addEventListener('click', async () => {
+      // Collect every section’s fields into objects
+      const blocks = dynContainer.querySelectorAll('.quick-section');
+      for (let i = 0; i < blocks.length; i++) {
+        const sec = blocks[i];
+        const rows = sec.querySelectorAll('.quick-field-row');
+        const rep = { ranking: 0, cost: 0, freq: '' };
+        rows.forEach(row => {
+          const key = row.children[0].value.trim();
+          const val = row.children[1].value.trim();
+          if (key === 'Repair Ranking') rep.ranking = parseInt(val, 10) || 0;
+          if (key === 'Repair Cost')    rep.cost    = parseFloat(val)   || 0;
+          if (key === 'Frequency')      rep.freq    = val;
+        });
+        // append this repair
+        await window.electronAPI.createNewRepair(stationId, rep);
+      }
+      // re-render to show saved repairs
+      await renderRepairsSection(container, stationId);
+    });
+    container.appendChild(saveBtn);
+  }
+
+
 
   // ────────────────────────────────────────────────────────────────────────────
   // Overview Tab: full editing UI, exactly like your old quick‐view editing
@@ -1641,7 +1739,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     addGeneralField('Latitude',       'Latitude',          stationData.Latitude);
     addGeneralField('Longitude',      'Longitude',         stationData.Longitude);
     addGeneralField('Status',         'Status',            stationData.Status,           true);
-    addGeneralField('Repair Ranking','Repair Ranking', stationData['Repair Ranking'], true);
 
     section.appendChild(generalDiv);
 
@@ -1773,7 +1870,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   detailNavButtons.forEach(button => {
-    button.addEventListener('click', () => {
+    button.addEventListener('click', async () => {
       const sectionName = button.dataset.section;
       setActiveDetailSection(sectionName);
       if (currentStationDetailData) {
@@ -1789,10 +1886,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             );
             break;
           case 'highPriorityRepairs':
-            renderFileListSection(
+            // call your new editable repairs UI
+            await renderRepairsSection(
               detailSections.highPriorityRepairs,
-              currentStationDetailData.highPriorityRepairs,
-              "No repairs listed."
+              currentStationDetailData.stationId
             );
             break;
           case 'documents':
@@ -2234,7 +2331,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       const res = await window.electronAPI.createNewStation(stationObject);
       if (res.success) {
-        showAlert('Infrastructure created successfully!');
+        showSuccess('Infrastructure created successfully!', 2000);
         closeModal();
 
         // Reload everything
@@ -2401,6 +2498,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     importSummary.style.color = allErrors.length ? '#cc0000' : '#007700';
     importSummary.textContent = parts.join(' ');
+
+    showSuccess('Imported successfully!', 2000);
 
     // 4) refresh UI & close modal
     await loadDataAndInitialize();

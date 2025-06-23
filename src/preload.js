@@ -74,5 +74,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Load saved category|province color map
   getSavedColors:        () => ipcRenderer.invoke('get-saved-colors'),
   // Save or update a specific category|province color
-  saveColor:             (cat, prov, col) => ipcRenderer.invoke('save-color', cat, prov, col)
+  saveColor:             (cat, prov, col) => ipcRenderer.invoke('save-color', cat, prov, col),
+
+  // Repair Priority
+  createNewRepair:      (stationId, repair) => ipcRenderer.invoke('add-station-repair', stationId, repair),
+  getStationRepairs:    (stationId)          => ipcRenderer.invoke('get-station-repairs', stationId)
 });

@@ -580,6 +580,39 @@ ipcMain.handle('get-station-data', async () => {
       }
     }
 
+
+    // Before returning the list
+    // ─── inject overall repair summary from per-station repairs file ───
+    for (const station of allStations) {
+      const repairsFile = path.join(REPAIRS_DIR, `${station.stationId}_repairs.xlsx`);
+      if (!fs.existsSync(repairsFile)) continue;
+
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.readFile(repairsFile);
+      const ws = wb.worksheets[0];
+
+      // collect every “Repair Ranking” value (column A)
+      const ranks = [];
+      ws.getColumn(1).values.slice(2).forEach(v => {
+        const n = parseInt(v, 10);
+        if (!isNaN(n)) ranks.push(n);
+      });
+
+      if (ranks.length) {
+        const maxRank = Math.max(...ranks);
+        station['Repair Ranking'] = maxRank;
+
+        // find the row with that maxRank to grab cost & frequency
+        for (let r = 2; r <= ws.rowCount; r++) {
+          if (parseInt(ws.getRow(r).getCell(1).value, 10) === maxRank) {
+            station['Repair Cost'] = parseFloat(ws.getRow(r).getCell(2).value) || 0;
+            station['Frequency']   = ws.getRow(r).getCell(3).value     || '';
+            break;
+          }
+        }
+      }
+    }
+
     // 7) Return the compiled list
     return allStations;
 
@@ -682,16 +715,6 @@ ipcMain.handle('save-station-data', async (_event, updatedStation) => {
 
     // 5) Sync headers across every sheet: drop extras, add missing
     wbNew.worksheets.forEach(ws => {
-
-      // 5a) Remove only the dynamic columns the user actually deleted:
-      const toDelete = beforeDynamic.filter(hdr => !allKeys.includes(hdr));
-      toDelete
-      .map(hdr => beforeHeaders.indexOf(hdr))
-        .filter(idx => idx >= 0)
-        .sort((a, b) => b - a)   // highest index first
-        .forEach(idx => {
-          ws.spliceColumns(idx + 1, 1);
-        });
   
       // 5b) Re-read the *current* headers from row 2
       let currentHeaders = ws.getRow(2)
@@ -1300,6 +1323,63 @@ ipcMain.on('open-pong', () => {
   });
   pongWin.loadFile(chosen);
 });
+
+const REPAIRS_DIR = path.join(DATA_DIR, 'repairs');
+
+// Ensure the repairs directory exists
+if (!fs.existsSync(REPAIRS_DIR)) {
+  fs.mkdirSync(REPAIRS_DIR, { recursive: true });
+}
+
+/**
+ * IPC handler: get-station-repairs
+ *   Reads data/repairs/[stationId]_repairs.xlsx (or returns [] if missing)
+ *   Expects columns: Repair Ranking, Repair Cost, Frequency
+ */
+ipcMain.handle('get-station-repairs', async (_e, stationId) => {
+  const file = path.join(REPAIRS_DIR, `${stationId}_repairs.xlsx`);
+  if (!fs.existsSync(file)) return [];
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.readFile(file);
+  const ws = wb.worksheets[0];
+  const repairs = [];
+  // assume headers are in row 1:
+  const hdrs = {};
+  ws.getRow(1).eachCell((cell, idx) => {
+    hdrs[cell.value] = idx;
+  });
+  for (let r = 2; r <= ws.rowCount; r++) {
+    const row = ws.getRow(r);
+    if (!row.hasValues) continue;
+    repairs.push({
+      ranking: parseInt(row.getCell(hdrs['Repair Ranking']).value, 10) || 0,
+      cost:     parseFloat(row.getCell(hdrs['Repair Cost']).value)     || 0,
+      freq:     row.getCell(hdrs['Frequency']).value                   || ''
+    });
+  }
+  return repairs;
+});
+
+/**
+ * IPC handler: add-station-repair
+ *   Appends one repair to [stationId]_repairs.xlsx (creating it if necessary)
+ */
+ipcMain.handle('add-station-repair', async (_e, stationId, { ranking, cost, freq }) => {
+  const file = path.join(REPAIRS_DIR, `${stationId}_repairs.xlsx`);
+  const wb = new ExcelJS.Workbook();
+  let ws;
+  if (fs.existsSync(file)) {
+    await wb.xlsx.readFile(file);
+    ws = wb.worksheets[0];
+  } else {
+    ws = wb.addWorksheet('Repairs');
+    ws.addRow(['Repair Ranking','Repair Cost','Frequency']);
+  }
+  ws.addRow([ranking, cost, freq]);
+  await wb.xlsx.writeFile(file);
+  return { success: true };
+});
+
 
 // ─── Electron Window Setup ──────────────────────────────────────────────────
 
