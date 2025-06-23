@@ -100,10 +100,13 @@ npm start
 ```
 nhs-infrastructure-map/
 ├── data/                      # Excel workbooks (auto-generated)
+│   ├── repairs/
+│   │   ├──<StationNumber1>_repairs.xlsx
+│   │   └──<StationNumber2>_repairs.xlsx
 │   ├── lookups.xlsx
 │   ├── <AssetType1>.xlsx
-│   ├── <AssetTypeN>.xlsx
-│   └── etc.
+│   ├── <AssetType2>.xlsx
+│   └── placeholder.txt        # So the data/ folder is pushed to Github
 ├── node_modules/              # Dependency storage
 ├── src/
 │   ├── main.js                # Electron main process & IPC handlers
@@ -142,10 +145,11 @@ June 20th, 2025
 * figure out sort by frequency meaning
 * Impliment the calculation for determining what should be the order of repairs (Sort by: Repair Priority) -->  Out of 100, it's somthing like x times 0.3 + y times 0.5 + z times 0.2
 
+* active becomes inactive issue
+* imported ACTIVE should become Active
+* imported NAME should become Name (maybe)
 
-* Inactive stations: currently not auto-moved to an `INACTIVE` workbook; requires manual handling.
-* Confirm expected behavior for reactivating stations—should they move back and restore history?
-
+* Need to hook up the file system with the program and integrate user interactivity (make sure the switch to compatability with sharepoint is easy)
 ---
 
 ## Roadmap
