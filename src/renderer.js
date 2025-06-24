@@ -2150,6 +2150,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   let allLocations        = [];
   let allAssetTypes       = [];
   let existingStationIDs  = new Set();
+  let repairInfos         = [];
 
   // Show/hide modal
   function openModal()   { addInfraModal.style.display = 'flex'; }
@@ -2261,14 +2262,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Save Repair Info → validate and then reveal Sections + Final Save
   btnSaveRepairInfo.addEventListener('click', () => {
-    // grab & validate repair inputs
+    // 1) grab & validate repair inputs
     const rr = inputRepairRanking.value.trim();
     const rc = inputRepairCost.value.trim();
     const fq = inputFrequency.value.trim();
 
-    // repair ranking can be blank or integer
-    if (rr && isNaN(parseInt(rr, 10))) {
-      showAlert('Repair Ranking must be a whole number.');
+    // Repair Ranking must be 1–5 or blank
+    if (rr && !['1','2','3','4','5'].includes(rr)) {
+      showAlert('Repair Ranking must be 1, 2, 3, 4, or 5.');
       return;
     }
 
@@ -2278,16 +2279,29 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
-    // hide repair‐info inputs now that they’re “saved”
-    modalRepairInfoContainer.style.display = 'none';
-    btnSaveRepairInfo.style.display        = 'none';
+    // 2) capture this repair
+    repairInfos.push({ ranking: rr, cost: rc, freq: fq });
 
-    // reveal extra sections and final Save button
+    // 3) update the on‐screen “Repairs Added” list
+    const listContainer = document.getElementById('modalRepairListContainer');
+    const listEl        = document.getElementById('modalRepairList');
+    listContainer.style.display = 'block';
+    const li = document.createElement('li');
+    li.textContent = `Ranking: ${rr || '--'}, Cost: ${rc || '--'}, Frequency: ${fq || '--'}`;
+    listEl.appendChild(li);
+
+    // 4) clear the inputs so you can enter another one
+    inputRepairRanking.value = '';
+    inputRepairCost.value    = '';
+    inputFrequency.value     = '';
+
+    // 5) ensure the extra‐sections & final‐save buttons are visible
     modalExtraSectionsContainer.style.display = 'block';
     btnAddSectionModal.style.display          = 'inline-block';
     btnCreateStation.style.display            = 'inline-block';
     createStationMessage.textContent          = '';
   });
+
 
 
   // Save a new location if typed, preserving asset type selection
@@ -2515,28 +2529,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
       }
 
-      // 2) Seed initial repair record if any Repair Info was filled
-      const rrVal = inputRepairRanking.value.trim();
-      const rcVal = inputRepairCost.value.trim();
-      const fqVal = inputFrequency.value.trim();
-      // Validate Repair Ranking (blank or integer)
-      if (rrVal && isNaN(parseInt(rrVal, 10))) {
-        showAlert('Repair Ranking must be a whole number.');
-        return;
-      }
-      // Validate Repair Cost ($) (blank or float)
-      if (rcVal && isNaN(parseFloat(rcVal))) {
-        showAlert('Repair Cost ($) must be a valid number.');
-        return;
-      }
-      // If any of the three fields is non-empty, append one repair record
-      if (rrVal || rcVal || fqVal) {
-        const initialRep = {
-          ranking: rrVal ? parseInt(rrVal, 10) : 0,
-          cost:     rcVal ? parseFloat(rcVal) : 0,
-          freq:     fqVal || ''
-        };
-        await window.electronAPI.createNewRepair(stationId, initialRep);
+      // 2) Seed *all* collected repair records
+      for (const rep of repairInfos) {
+        const ranking = rep.ranking ? parseInt(rep.ranking, 10) : 0;
+        const cost    = rep.cost    ? parseFloat(rep.cost)    : 0;
+        const freq    = rep.freq    || '';
+        await window.electronAPI.createNewRepair(stationId, {
+          ranking,
+          cost,
+          freq
+        });
       }
 
       // 3) Show success, close modal, refresh everything
