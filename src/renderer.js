@@ -1209,21 +1209,54 @@ document.addEventListener('DOMContentLoaded', async () => {
     // “Delete Section” button
     const removeSecBtn = document.createElement('button');
     removeSecBtn.textContent = 'Delete Section';
-    removeSecBtn.addEventListener('click', () => {
+
+    removeSecBtn.addEventListener('click', async () => {
+      const sectionName = sectionDiv.dataset.sectionName;
+      const prefix = sectionDiv.dataset.sectionKeyPrefix; // e.g. "Site Info - "
+      console.log(`[DEBUG] Deleting section "${sectionName}" with prefix "${prefix}"`);
+
       const rows = sectionDiv.querySelectorAll('.quick-field-row');
-      if (rows.length > 0) {
-        if (!confirm('This section is not empty. Delete anyway? All fields will be lost.')) {
-          return;
-        }
+      if (rows.length > 0 && !confirm(`This section is not empty. Delete anyway?`)) {
+        console.log('[DEBUG] User cancelled delete');
+        return;
       }
-      // Remove all keys starting with this section’s prefix
-      const prefix = sectionDiv.dataset.sectionKeyPrefix;
+
+      // 1) Remove from currentEditingStation
       Object.keys(currentEditingStation).forEach(k => {
         if (k.startsWith(prefix)) {
           delete currentEditingStation[k];
         }
       });
+      console.log('[DEBUG] currentEditingStation after delete:', Object.keys(currentEditingStation));
+
+      // 2) Remove the UI block
       sectionDiv.remove();
+
+      // 3) Persist to Excel
+      console.log('[DEBUG] Calling saveStationData...');
+      const result = await window.electronAPI.saveStationData(currentEditingStation);
+      console.log('[DEBUG] saveStationData result:', result);
+      if (!result.success) {
+        showAlert(`Save failed: ${result.message}`);
+        return;
+      }
+
+      // 4) Reload allStationData
+      console.log('[DEBUG] Reloading allStationData...');
+      await loadDataAndInitialize();
+      console.log('[DEBUG] allStationData loaded:', allStationData.map(s => ({
+        id: s.stationId,
+        keys: Object.keys(s).filter(k => k.startsWith(prefix))
+      })));
+
+      // 5) Re-display quick-view for this station
+      const fresh = allStationData.find(s => String(s.stationId) === String(currentEditingStation.stationId));
+      if (fresh) {
+        console.log('[DEBUG] Redisplaying quick view on station', fresh.stationId);
+        displayStationDetailsQuickView(fresh);
+      } else {
+        console.warn('[DEBUG] Could not re-find station after reload');
+      }
     });
     headerDiv.appendChild(removeSecBtn);
 
