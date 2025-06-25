@@ -7,6 +7,7 @@
 // All “section templates” are derived from the Excel headers via IPC – we no longer use localStorage.
 //
 // ─────────────────────────────────────────────────────────────────────────────
+
 document.addEventListener('DOMContentLoaded', async () => {
 
   // Load colours
@@ -16,9 +17,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   // ────────────────────────────────────────────────────────────────────────────
   // 1) Leaflet Map Initialization
   // ────────────────────────────────────────────────────────────────────────────
-  const map = L.map('map').setView([54.5, -119], 5);
+  const map = L.map('map', {
+    // lock panning to the world’s [-90, -180] → [90, 180] bounds
+    maxBounds: [[-90, -180], [90, 180]],
+    // bounce back immediately at the edge
+    maxBoundsViscosity: 1.0
+  }).setView([54.5, -119], 5);
+
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    // don’t wrap the tiles horizontally
+    noWrap: true
   }).addTo(map);
 
   // ────────────────────────────────────────────────────────────────────────────
@@ -86,6 +95,120 @@ document.addEventListener('DOMContentLoaded', async () => {
   let currentRepairsSortOption = 'repairRanking';   // default sort
 
   let isPriorityMapActive      = false;
+
+  let currentPhotoFolder = null;
+  let loadedPhotoGroups  = null;
+
+  // Photos stuff
+  // ────────────────────────────────────────────────────────────────────────────────────────────────────────
+  // Show/hide the built-in #alert overlay as a loading indicator
+  function showLoadingMessage(msg) {
+    const t = document.getElementById('alert');
+    t.textContent = msg;
+    t.style.background = '#333';
+    t.classList.remove('hidden');
+  }
+  function hideLoadingMessage() {
+    const t = document.getElementById('alert');
+    t.classList.add('hidden');
+    t.style.background = '';
+  }
+
+  // Wipe out the photos tab
+  function clearPhotosSection() {
+    detailSections.photos.innerHTML = '';
+    selectedPhotoGroup = null;
+  }
+
+  // Render the grid of folder cards
+  function renderPhotoGroups(groups) {
+    const container = detailSections.photos;
+    clearPhotosSection();
+
+    const grid = document.createElement('div');
+    grid.style.display = 'flex';
+    grid.style.flexWrap = 'wrap';
+    grid.style.gap = '16px';
+
+    Object.entries(groups).forEach(([folderName, items]) => {
+      const card = document.createElement('div');
+      card.style.border = '1px solid #ccc';
+      card.style.padding = '12px';
+      card.style.width = '140px';
+      card.style.textAlign = 'center';
+      card.style.cursor = 'pointer';
+      card.innerHTML = `
+        <div style="font-size:2em;">📁</div>
+        <div style="margin-top:8px; word-break:break-word;">
+          ${folderName}
+        </div>
+        <div style="margin-top:4px; font-size:0.9em; color:#555;">
+          ${items.length} photo${items.length===1?'':'s'}
+        </div>`;
+      card.onclick = () => renderPhotosInGroup(folderName, items);
+      grid.appendChild(card);
+    });
+
+    container.appendChild(grid);
+  }
+
+  // Render the thumbnails for one folder
+  function renderPhotosInGroup(folderName, items) {
+    const container = detailSections.photos;
+    clearPhotosSection();
+
+    // Back button
+    const back = document.createElement('button');
+    back.textContent = '← Back to folders';
+    back.style.marginBottom = '12px';
+    back.onclick = () => renderPhotoGroups(loadedPhotoGroups);
+    container.appendChild(back);
+
+    // Title
+    const title = document.createElement('h4');
+    title.textContent = folderName;
+    container.appendChild(title);
+
+    // Thumbnails
+    const grid = document.createElement('div');
+    grid.style.display = 'flex';
+    grid.style.flexWrap = 'wrap';
+    grid.style.gap = '12px';
+
+    items.forEach(imgItem => {
+      const thumb = document.createElement('img');
+      thumb.src = `file://${imgItem.path}`;
+      thumb.alt = imgItem.name;
+      thumb.title = imgItem.name;
+      thumb.style.width = '120px';
+      thumb.style.height = '120px';
+      thumb.style.objectFit = 'cover';
+      thumb.style.cursor = 'pointer';
+      thumb.onclick = () => showImageOverlay(imgItem);
+      grid.appendChild(thumb);
+    });
+
+    container.appendChild(grid);
+  }
+
+  // Full‐screen overlay for a single image
+  function showImageOverlay(imgItem) {
+    const overlay = document.createElement('div');
+    overlay.style = `
+      position:fixed; top:0; left:0; right:0; bottom:0;
+      background:rgba(0,0,0,0.8);
+      display:flex; align-items:center; justify-content:center;
+      z-index:10000;
+    `;
+    const img = document.createElement('img');
+    img.src = `file://${imgItem.path}`;
+    img.style.maxWidth = '90%';
+    img.style.maxHeight = '90%';
+    overlay.appendChild(img);
+    overlay.onclick = () => overlay.remove();
+    document.body.appendChild(overlay);
+  }
+ // ────────────────────────────────────────────────────────────────────────────────────────────────────────
 
   repairsSortSelect.addEventListener('change', e => {
     currentRepairsSortOption = e.target.value;
@@ -1291,8 +1414,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         <label style="display:block; margin-bottom:8px;">
           Section name:
           <input type="text" id="newSectionNameInput"
-                 style="width:100%; margin-top:4px; padding:6px;"
-                 value="${defaultValue}" />
+                style="width:100%; margin-top:4px; padding:6px;"
+                value="${defaultValue}" />
         </label>
         <div style="text-align:right; margin-top:10px;">
           <button id="cancelBtn" style="margin-right:8px;">Cancel</button>
@@ -1302,21 +1425,39 @@ document.addEventListener('DOMContentLoaded', async () => {
       overlay.appendChild(box);
       document.body.appendChild(overlay);
 
-      box.querySelector('#cancelBtn').onclick = () => {
-        cleanup();
-        resolve(null);
-      };
-      box.querySelector('#okBtn').onclick = () => {
-        const val = box.querySelector('#newSectionNameInput').value.trim();
-        cleanup();
-        resolve(val.length > 0 ? val : null);
-      };
+      const inputEl = box.querySelector('#newSectionNameInput');
+      const cancelBtn = box.querySelector('#cancelBtn');
+      const okBtn     = box.querySelector('#okBtn');
 
-      function cleanup() {
-        document.body.removeChild(overlay);
+      inputEl.focus();
+
+      // Cleanup helper
+      function cleanup(val) {
+        document.removeEventListener('keydown', escHandler);
+        overlay.remove();
+        resolve(val);
+        document.body.focus();
       }
 
-      box.querySelector('#newSectionNameInput').focus();
+      // Escape key to cancel
+      const escHandler = e => {
+        if (e.key === 'Escape') cleanup(null);
+      };
+      document.addEventListener('keydown', escHandler);
+
+      // Enter key to accept
+      inputEl.addEventListener('keydown', e => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          okBtn.click();
+        }
+      });
+
+      cancelBtn.addEventListener('click', () => cleanup(null));
+      okBtn.addEventListener('click', () => {
+        const val = inputEl.value.trim();
+        cleanup(val.length > 0 ? val : null);
+      });
     });
   }
 
@@ -1359,11 +1500,20 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
     if (isNaN(parsedLat)) {
-      showAlert('Latitude must be a valid number');
+      showAlert('Latitude must be a valid number.');
       return;
     }
     if (isNaN(parsedLon)) {
-      showAlert('Longitude must be a valid number');
+      showAlert('Longitude must be a valid number.');
+      return;
+    }
+    // range checks
+    if (parsedLat < -90 || parsedLat > 90) {
+      showAlert('Latitude must be between -90° and 90°.');
+      return;
+    }
+    if (parsedLon < -180 || parsedLon > 180) {
+      showAlert('Longitude must be between -180° and 180°.');
       return;
     }
 
@@ -1553,6 +1703,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 
   function closeStationDetailPage() {
+    loadedPhotoGroups = null;
+    clearPhotosSection();
+
     stationDetailPage.classList.add('hidden');
     mainViewWrapper.classList.remove('hidden');
     // Unhide Add Infrastructure button
@@ -1578,7 +1731,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     );
     await renderRepairsSection(detailSections.highPriorityRepairs, currentStationDetailData.stationId);
     renderFileListSection(detailSections.documents, currentStationDetailData.documents, "No documents found.");
-    renderPhotoGallerySection(detailSections.photos, currentStationDetailData.photos, "No photos found.");
+    await renderPhotosTab(currentStationDetailData.photos);
   }
 
   // ────────────────────────────────────────────────────────────────────────────
@@ -1951,51 +2104,121 @@ document.addEventListener('DOMContentLoaded', async () => {
     sectionElement.appendChild(ul);
   }
 
-  function renderPhotoGallerySection(sectionElement, photos, emptyMessage) {
-    sectionElement.innerHTML = '';
-    if (!photos || photos.length === 0) {
-      sectionElement.innerHTML = `<p>${emptyMessage}</p>`;
-      return;
+  
+  /**
+   * Renders the “Photos” tab.
+   * If currentPhotoFolder===null → shows folder cards.
+   * Otherwise → shows image thumbnails in that folder + a back button.
+   */
+  async function renderPhotosTab(items) {
+    console.log('▶️ renderPhotosTab called, currentPhotoFolder=', currentPhotoFolder);
+    const container = detailSections.photos;
+
+    // 1) wipe out any old content
+    container.innerHTML = '';
+
+    // 2) ➕ Add Photos button (always shown)
+    const addBtn = document.createElement('button');
+    addBtn.id          = 'btnAddPhotos';
+    addBtn.textContent = '➕ Add Photos';
+    addBtn.style.display = 'block';
+    addBtn.style.margin  = '12px 0';
+    addBtn.addEventListener('click', showAddPhotosDialog);
+    container.appendChild(addBtn);
+
+    // 3) Back to folders button (only if we're already inside one)
+    if (currentPhotoFolder) {
+      const back = document.createElement('button');
+      back.textContent     = '← Back to folders';
+      back.style.marginBottom = '12px';
+      back.onclick = () => {
+        currentPhotoFolder = null;
+        renderPhotosTab(items);
+      };
+      container.appendChild(back);
     }
-    photos.forEach(photo => {
-      if (!photo.isDirectory) {
-        const imgContainer = document.createElement('div');
-        imgContainer.style.display = 'inline-block';
-        imgContainer.style.margin = '5px';
-        imgContainer.style.textAlign = 'center';
 
-        const img = document.createElement('img');
-        img.src = `file://${photo.path}`;
-        img.alt = photo.name;
-        img.title = `Click to open: ${photo.name}`;
-        img.onclick = () => window.electronAPI.openFile(photo.path);
-        img.onerror = () => {
-          img.alt = `Could not load: ${photo.name}`;
-          img.src = '';
-          img.style.border = '1px dashed red';
-          img.style.width = '100px';
-          img.style.height = '100px';
-          img.style.lineHeight = '100px';
-          img.style.textAlign = 'center';
-          img.textContent = 'Error';
-        };
-
-        const nameLabel = document.createElement('p');
-        nameLabel.textContent = photo.name;
-        nameLabel.style.fontSize = '0.8em';
-        nameLabel.style.maxWidth = '150px';
-        nameLabel.style.overflowWrap = 'break-word';
-
-        imgContainer.appendChild(img);
-        imgContainer.appendChild(nameLabel);
-        sectionElement.appendChild(imgContainer);
+    // 4) Render either top‐level folders or thumbnails
+    if (!currentPhotoFolder) {
+      // Top-level: show the folder cards
+      const folders = items.filter(i => i.isDirectory);
+      if (!folders.length) {
+        container.innerHTML += '<p>No sub-folders found.</p>';
+        return;
       }
-    });
+      const grid = document.createElement('div');
+      grid.style.display    = 'flex';
+      grid.style.flexWrap   = 'wrap';
+      grid.style.gap        = '16px';
+      folders.forEach(f => {
+        const card = document.createElement('div');
+        card.style.border     = '1px solid #ccc';
+        card.style.padding    = '12px';
+        card.style.width      = '140px';
+        card.style.textAlign  = 'center';
+        card.style.cursor     = 'pointer';
+        card.innerHTML = `
+          <div style="font-size:2em;">📁</div>
+          <div style="margin-top:8px; word-break:break-word;">${f.name}</div>
+          <div style="font-size:0.9em; color:#555;">${f.count || ''} photos</div>
+        `.trim();
+        card.onclick = async () => {
+          currentPhotoFolder = f.path;
+          const sub = await window.electronAPI.listDirectoryContents(f.path);
+          renderPhotosTab(sub);
+        };
+        grid.appendChild(card);
+      });
+      container.appendChild(grid);
 
-    if (sectionElement.childElementCount === 0 && photos.length > 0) {
-      sectionElement.innerHTML = `<p>No photo files found (only folders listed). Click folder names to explore.</p>`;
+    } else {
+      // Inside a folder: show its images
+      const images = items.filter(i => !i.isDirectory);
+      if (!images.length) {
+        container.innerHTML += '<p>No images in this folder.</p>';
+        return;
+      }
+      const grid = document.createElement('div');
+      grid.style.display    = 'flex';
+      grid.style.flexWrap   = 'wrap';
+      grid.style.gap        = '12px';
+      images.forEach(imgItem => {
+        const thumb = document.createElement('img');
+        thumb.src       = `file://${imgItem.path}`;
+        thumb.alt       = imgItem.name;
+        thumb.title     = imgItem.name;
+        thumb.style.width       = '120px';
+        thumb.style.height      = '120px';
+        thumb.style.objectFit   = 'cover';
+        thumb.style.cursor      = 'pointer';
+        thumb.onclick   = () => showImageOverlay(imgItem);
+        grid.appendChild(thumb);
+      });
+      container.appendChild(grid);
     }
   }
+
+  /** 
+   * Simple full-screen overlay to show one image.
+   * Click anywhere to close.
+   */
+  function showImageOverlay(imgItem) {
+    const overlay = document.createElement('div');
+    overlay.style = `
+      position:fixed; top:0; left:0; right:0; bottom:0;
+      background:rgba(0,0,0,0.8); display:flex;
+      align-items:center; justify-content:center;
+      z-index:10000;
+    `;
+    const img = document.createElement('img');
+    img.src = `file://${imgItem.path}`;
+    img.style.maxWidth = '90%';
+    img.style.maxHeight = '90%';
+    overlay.appendChild(img);
+    overlay.onclick = () => overlay.remove();
+    document.body.appendChild(overlay);
+  }
+
 
   function setActiveDetailSection(sectionName) {
     detailNavButtons.forEach(btn =>
@@ -2037,11 +2260,45 @@ document.addEventListener('DOMContentLoaded', async () => {
             );
             break;
           case 'photos':
-            renderPhotoGallerySection(
-              detailSections.photos,
-              currentStationDetailData.photos,
-              "No photos."
-            );
+            // On first entry, load & group all images by top-level folder
+            if (!loadedPhotoGroups) {
+              showLoadingMessage('Loading photos, please wait…');
+              // recursive fetch of every image+folder under the station folder
+              const allItems = await window.electronAPI
+                .listDirectoryContentsRecursive(currentStationDetailData.stationFolder);
+              hideLoadingMessage();
+
+              // flatten to image files only
+              const imageFiles = allItems.filter(i => !i.isDirectory);
+
+              // group by first directory under stationFolder
+              loadedPhotoGroups = {};
+              imageFiles.forEach(f => {
+                // remove the leading slash/backslash after stationFolder
+                const rel = f.path.slice(
+                  currentStationDetailData.stationFolder.length + 1
+                );
+                // split on both "/" and "\" and take the first piece
+                const top = rel.split(/[/\\]/)[0] || '';
+                if (!loadedPhotoGroups[top]) loadedPhotoGroups[top] = [];
+                loadedPhotoGroups[top].push(f);
+              });
+
+              // remove any empty-group key (just in case)
+              delete loadedPhotoGroups[''];
+            }
+            // render the folder cards
+            renderPhotoGroups(loadedPhotoGroups);
+            {
+              const old = detailSections.photos.querySelector('#btnAddPhotos');
+              if (old) old.remove();
+              const btn = document.createElement('button');
+              btn.id          = 'btnAddPhotos';
+              btn.textContent = '➕ Add Photos';
+              btn.style.margin = '10px 0';
+              btn.onclick     = showAddPhotosDialog;
+              detailSections.photos.appendChild(btn);
+            }
             break;
         }
       }
@@ -2246,8 +2503,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     const lat = parseFloat(inputLatitude.value);
     const lon = parseFloat(inputLongitude.value);
+    // must be valid numbers
     if (isNaN(lat) || isNaN(lon)) {
       showAlert('Latitude and Longitude must be valid numbers.');
+      return;
+    }
+    // must lie on Earth
+    if (lat < -90 || lat > 90) {
+      showAlert('Latitude must be between -90° and 90°.');
+      return;
+    }
+    if (lon < -180 || lon > 180) {
+      showAlert('Longitude must be between -180° and 180°.');
       return;
     }
 
@@ -2563,6 +2830,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   function resetModal() {
     selectLocation.value = '';
     inputNewLocation.value = '';
+    assetTypeContainer.style.display = 'none';
     selectAssetType.value = '';
     inputNewAssetType.value = '';
     generalInfoForm.style.display = 'none';
@@ -2571,6 +2839,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     inputStatus.value = '';
     inputLatitude.value = '';
     inputLongitude.value = '';
+
+    // drop all previously‐added repairs
+    repairInfos = [];
+    // hide the Repair Info inputs & button
+    modalRepairInfoContainer.style.display = 'none';
+    btnSaveRepairInfo.style.display        = 'none';
+    // clear the inputs
+    inputRepairRanking.value = '';
+    inputRepairCost.value    = '';
+    inputFrequency.value     = '';
+
+    // hide & clear the “Repairs Added” list
+    const listContainer = document.getElementById('modalRepairListContainer');
+    const listEl        = document.getElementById('modalRepairList');
+    listContainer.style.display = 'none';
+    listEl.innerHTML            = '';
+
     modalExtraSectionsContainer.style.display = 'none';
     const existingSecEls = modalExtraSectionsContainer.querySelectorAll('.section-container');
     existingSecEls.forEach(el => el.remove());
@@ -2741,4 +3026,106 @@ function getComboColor(category, province) {
     comboColorMap[key] = PALETTE[ comboNextIndex++ % PALETTE.length ];
   }
   return comboColorMap[key];
+}
+
+
+/**
+ * Shows a modal to choose:
+ *  • which folder (existing/new/root) to add into,
+ *  • then pick files,
+ *  • then copy via electronAPI.addPhotos().
+ */
+async function showAddPhotosDialog() {
+  // Build overlay
+  const overlay = document.createElement('div');
+  overlay.style = `
+    position:fixed; top:0; left:0; right:0; bottom:0;
+    background:rgba(0,0,0,0.5); display:flex;
+    align-items:center; justify-content:center; z-index:10000;
+  `;
+  document.body.appendChild(overlay);
+
+  // Modal box
+  const box = document.createElement('div');
+  box.style = 'background:white; padding:20px; border-radius:6px; width:300px;';
+  box.innerHTML = `
+    <h3>Select Destination</h3>
+    <div>
+      <label><input type="radio" name="dest" value="existing" checked> Existing folder</label>
+      <select id="existingFolderSelect" style="width:100%; margin:6px 0;"></select>
+    </div>
+    <div>
+      <label><input type="radio" name="dest" value="new"> New folder</label>
+      <input type="text" id="newFolderName" placeholder="Folder name" style="width:100%; margin:6px 0;" disabled>
+    </div>
+    <div>
+      <label><input type="radio" name="dest" value="root"> Station root</label>
+    </div>
+    <div style="text-align:right; margin-top:12px;">
+      <button id="cancelAddPhotos">Cancel</button>
+      <button id="okAddPhotos">Next →</button>
+    </div>
+  `;
+  overlay.appendChild(box);
+
+  // Populate existing‐folder dropdown
+  const select = box.querySelector('#existingFolderSelect');
+  Object.keys(loadedPhotoGroups).forEach(name => {
+    const opt = document.createElement('option');
+    opt.value = name;
+    opt.textContent = name;
+    select.appendChild(opt);
+  });
+
+  // Radio logic
+  const radios = box.querySelectorAll('input[name="dest"]');
+  const newNameInput = box.querySelector('#newFolderName');
+  radios.forEach(r => {
+    r.addEventListener('change', () => {
+      newNameInput.disabled = (r.value !== 'new');
+    });
+  });
+
+  // Cancel
+  box.querySelector('#cancelAddPhotos').onclick = () => {
+    overlay.remove();
+  };
+
+  // OK → file picker
+  box.querySelector('#okAddPhotos').onclick = async () => {
+    // Determine destination path
+    const choice = box.querySelector('input[name="dest"]:checked').value;
+    let destFolder = currentStationDetailData.stationFolder;
+    if (choice === 'existing') {
+      destFolder = path.join(destFolder, select.value);
+    } else if (choice === 'new') {
+      const name = newNameInput.value.trim();
+      if (!name) {
+        alert('Please enter a new folder name.');
+        return;
+      }
+      destFolder = path.join(destFolder, name);
+    }
+    overlay.remove();
+
+    // Ask user to pick files
+    const files = await window.electronAPI.selectPhotoFiles();
+    if (files.length === 0) return;
+
+    showLoadingMessage('Adding photos…');
+    const result = await window.electronAPI.addPhotos(destFolder, files);
+    hideLoadingMessage();
+
+    if (!result.success) {
+      alert('Error adding photos: ' + result.message);
+      return;
+    }
+
+    // Clear cache + re-render current view
+    loadedPhotoGroups = null;
+    // re-trigger the Photos tab logic:
+    document
+      .querySelector('.detail-nav-btn[data-section="photos"]')
+      .click();
+  };
 }

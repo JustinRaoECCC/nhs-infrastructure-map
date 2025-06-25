@@ -140,8 +140,6 @@ nhs-infrastructure-map/
 
 June 20th, 2025
 
-* Change the Add Infrastructure page, so that when Save General Info is clicked, the 3 fields for repair priority appear (repair ranking, repair cost, frequency), and then they all can be edited OR left blank, and then after you click Save Repair Info, THEN you have the buttons for + Add New Section and Save Infrastructure
-- Test this (it works a bit but very buggy)
 
 * figure out sort by frequency meaning
 * Impliment the calculation for determining what should be the order of repairs (Sort by: Repair Priority) -->  Out of 100, it's somthing like x times 0.3 + y times 0.5 + z times 0.2
@@ -151,6 +149,8 @@ June 20th, 2025
 * imported NAME should become Name (maybe)
 
 * Need to hook up the file system with the program and integrate user interactivity (make sure the switch to compatability with sharepoint is easy)
+
+- Currently the add photos button doesnt work
 ---
 
 ## Roadmap

@@ -79,4 +79,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getStationRepairs:    (stationId)          => ipcRenderer.invoke('get-station-repairs', stationId),
   deleteStationRepairs: stationId => ipcRenderer.invoke('delete-station-repairs', stationId),
 
+  // List photos & folders in an arbitrary directory
+  listDirectoryContents: (dirPath) => ipcRenderer.invoke('list-directory-contents', dirPath),
+  listDirectoryContentsRecursive: (dirPath) => ipcRenderer.invoke('list-directory-contents-recursive', dirPath),
+
+  
+  // Photo‐upload helpers
+  selectPhotoFiles:       ()                   => ipcRenderer.invoke('select-photo-files'),
+  addPhotos:              (destFolder, files) => ipcRenderer.invoke('add-photos', destFolder, files),
+
 });

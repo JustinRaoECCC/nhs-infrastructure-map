@@ -859,6 +859,36 @@ async function listDirectoryContents(dirPath, fileTypes = null) {
   }
 }
 
+/**
+ * Recursively lists all files and directories under `dirPath`.
+ * If `fileTypes` is provided, only files with those extensions are included.
+ * Always includes directories.
+ */
+async function listDirectoryContentsRecursive(dirPath, fileTypes = null) {
+  const results = [];
+  try {
+    const entries = await fsPromises.readdir(dirPath, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.join(dirPath, entry.name);
+      if (entry.isDirectory()) {
+        // include the folder itself
+        results.push({ name: entry.name, path: fullPath, isDirectory: true });
+        // then recurse into it
+        const nested = await listDirectoryContentsRecursive(fullPath, fileTypes);
+        results.push(...nested);
+      } else {
+        const ext = path.extname(entry.name).toLowerCase();
+        if (!fileTypes || fileTypes.includes(ext)) {
+          results.push({ name: entry.name, path: fullPath, isDirectory: false });
+        }
+      }
+    }
+  } catch {
+    // ignore directories we can't read
+  }
+  return results;
+}
+
 
 /**
  * IPC handler: gathers file/folder details for a given station
@@ -918,8 +948,8 @@ ipcMain.handle('get-station-file-details', async (event, stationId, stationDataF
   // 4) Continue to pick up the other sections from their usual subfolders
   const highPriorityRepairs = await listDirectoryContents(path.join(stationFolder, 'High Priority Repairs'));
   const documents           = await listDirectoryContents(path.join(stationFolder, 'Documents'));
-  const photos              = await listDirectoryContents(
-    path.join(stationFolder, 'Photos'),
+  const photos = await listDirectoryContentsRecursive(
+    stationFolder,
     ['.jpg', '.jpeg', '.png', '.gif']
   );
 
@@ -928,6 +958,7 @@ ipcMain.handle('get-station-file-details', async (event, stationId, stationDataF
     success: true,
     data: {
       stationId,
+      stationFolder,
       overview: stationDataFromExcel,
       inspectionHistory,
       highPriorityRepairs,
@@ -1372,6 +1403,52 @@ ipcMain.handle('delete-station-repairs', async (_evt, stationId) => {
     }
     return { success: true };
   } catch (err) {
+    return { success: false, message: err.message };
+  }
+});
+
+/**
+ * IPC handler: list immediate image files + subfolders in any directory
+ */
+ipcMain.handle('list-directory-contents', async (_evt, dirPath) => {
+  // only images + all folders
+  const fileTypes = ['.jpg','.jpeg','.png','.gif'];
+  return await listDirectoryContents(dirPath, fileTypes);
+});
+
+/**
+ * IPC handler: recursively list all image files + subfolders under dirPath
+ */
+ipcMain.handle('list-directory-contents-recursive', async (_evt, dirPath) => {
+  const fileTypes = ['.jpg', '.jpeg', '.png', '.gif'];
+  return await listDirectoryContentsRecursive(dirPath, fileTypes);
+});
+
+/**
+ * IPC handler: lets user pick one or more image files from disk.
+ */
+ipcMain.handle('select-photo-files', async () => {
+  const { canceled, filePaths } = await dialog.showOpenDialog({
+    properties: ['openFile', 'multiSelections'],
+    filters: [{ name: 'Images', extensions: ['jpg','jpeg','png','gif'] }]
+  });
+  return canceled ? [] : filePaths;
+});
+
+/**
+ * IPC handler: copy selected files into the destination folder.
+ */
+ipcMain.handle('add-photos', async (_evt, destFolder, filePaths) => {
+  try {
+    // ensure the dest directory exists
+    await fsPromises.mkdir(destFolder, { recursive: true });
+    for (const src of filePaths) {
+      const name = path.basename(src);
+      await fsPromises.copyFile(src, path.join(destFolder, name));
+    }
+    return { success: true };
+  } catch (err) {
+    console.error('add-photos error:', err);
     return { success: false, message: err.message };
   }
 });
