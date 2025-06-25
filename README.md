@@ -138,7 +138,7 @@ nhs-infrastructure-map/
 ## Current Bugs / TODO List
 
 
-June 20th, 2025
+June 25th, 2025
 
 
 * figure out sort by frequency meaning
@@ -151,6 +151,7 @@ June 20th, 2025
 * Need to hook up the file system with the program and integrate user interactivity (make sure the switch to compatability with sharepoint is easy)
 
 - Currently the add photos button doesnt work
+- Delete doesnt work
 ---
 
 ## Roadmap
