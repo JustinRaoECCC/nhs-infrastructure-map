@@ -150,46 +150,120 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     container.appendChild(grid);
+  
   }
 
   // Render the thumbnails for one folder
-  function renderPhotosInGroup(folderName, items) {
+  async function renderPhotosInGroup(folderName, items) {
     const container = detailSections.photos;
+    // 1) Clear out whatever is currently in the photos panel
     clearPhotosSection();
 
-    // Back button
+    // 2) Back-to-folders button
     const back = document.createElement('button');
     back.textContent = '← Back to folders';
     back.style.marginBottom = '12px';
-    back.onclick = () => renderPhotoGroups(loadedPhotoGroups);
     container.appendChild(back);
 
-    // Title
+    back.addEventListener('click', async () => {
+      // Reset state
+      currentPhotoFolder = null;
+      clearPhotosSection();
+
+      // Show loading
+      showLoadingMessage('Loading photos…');
+
+      // Re-fetch *all* images under stationFolder
+      const allItems = await window.electronAPI
+        .listDirectoryContentsRecursive(currentStationDetailData.stationFolder);
+
+      // Hide loading
+      hideLoadingMessage();
+
+      // Re-group into top-level folders vs root images
+      const imageFiles = allItems.filter(i => !i.isDirectory);
+      const newLoadedGroups = {};
+      const rootImages = [];
+      imageFiles.forEach(f => {
+        const rel = f.path.slice(
+          currentStationDetailData.stationFolder.length + 1
+        );
+        const parts = rel.split(/[/\\]/);
+        if (parts.length === 1) {
+          // No slash → file in the root
+          rootImages.push(f);
+        } else {
+          // First segment is the sub-folder
+          const top = parts[0] || '';
+          if (!newLoadedGroups[top]) newLoadedGroups[top] = [];
+          newLoadedGroups[top].push(f);
+        }
+      });
+
+      // Replace the cached groups
+      loadedPhotoGroups = newLoadedGroups;
+
+      // a) Render folder cards
+      renderPhotoGroups(loadedPhotoGroups);
+
+      // b) Render root-level images
+      if (rootImages.length) {
+        const imgGrid = document.createElement('div');
+        imgGrid.style.display    = 'flex';
+        imgGrid.style.flexWrap   = 'wrap';
+        imgGrid.style.gap        = '12px';
+        imgGrid.style.marginTop  = '16px';
+        rootImages.forEach(imgItem => {
+          const thumb = document.createElement('img');
+          thumb.src           = `file://${imgItem.path}`;
+          thumb.alt           = imgItem.name;
+          thumb.title         = imgItem.name;
+          thumb.style.width     = '120px';
+          thumb.style.height    = '120px';
+          thumb.style.objectFit = 'cover';
+          thumb.style.cursor    = 'pointer';
+          thumb.onclick         = () => showImageOverlay(imgItem);
+          imgGrid.appendChild(thumb);
+        });
+        container.appendChild(imgGrid);
+      }
+
+      // c) Re-add the "+ Add Photos" button
+      const addBtn = document.createElement('button');
+      addBtn.id          = 'btnAddPhotos';
+      addBtn.textContent = '+ Add Photos';
+      addBtn.style.display = 'block';
+      addBtn.style.margin  = '12px 0';
+      addBtn.onclick       = showAddPhotosDialog;
+      container.appendChild(addBtn);
+    });
+
+    // 3) Folder title
     const title = document.createElement('h4');
     title.textContent = folderName;
     container.appendChild(title);
 
-    // Thumbnails
+    // 4) Thumbnails grid for *this* folder
     const grid = document.createElement('div');
-    grid.style.display = 'flex';
-    grid.style.flexWrap = 'wrap';
-    grid.style.gap = '12px';
-
+    grid.style.display   = 'flex';
+    grid.style.flexWrap  = 'wrap';
+    grid.style.gap       = '12px';
+    grid.style.marginTop = '12px';
     items.forEach(imgItem => {
       const thumb = document.createElement('img');
-      thumb.src = `file://${imgItem.path}`;
-      thumb.alt = imgItem.name;
-      thumb.title = imgItem.name;
-      thumb.style.width = '120px';
-      thumb.style.height = '120px';
+      thumb.src           = `file://${imgItem.path}`;
+      thumb.alt           = imgItem.name;
+      thumb.title         = imgItem.name;
+      thumb.style.width     = '120px';
+      thumb.style.height    = '120px';
       thumb.style.objectFit = 'cover';
-      thumb.style.cursor = 'pointer';
-      thumb.onclick = () => showImageOverlay(imgItem);
+      thumb.style.cursor    = 'pointer';
+      thumb.onclick         = () => showImageOverlay(imgItem);
       grid.appendChild(thumb);
     });
-
     container.appendChild(grid);
   }
+
 
   // Full‐screen overlay for a single image
   function showImageOverlay(imgItem) {
@@ -2360,7 +2434,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (old) old.remove();
                 const btn = document.createElement('button');
                 btn.id          = 'btnAddPhotos';
-                btn.textContent = '➕ Add Photos';
+                btn.textContent = '+ Add Photos';
                 btn.style.margin = '10px 0';
                 btn.onclick     = showAddPhotosDialog;
                 detailSections.photos.appendChild(btn);
