@@ -88,5 +88,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   selectPhotoFiles:       ()                   => ipcRenderer.invoke('select-photo-files'),
   addPhotos:              (destFolder, files) => ipcRenderer.invoke('add-photos', destFolder, files),
 
+  listDocumentContents:     (dirPath)            => ipcRenderer.invoke('list-document-contents', dirPath),
+  selectDocumentFiles:      ()                   => ipcRenderer.invoke('select-document-files'),
+  addDocuments:             (destFolder, files)  => ipcRenderer.invoke('add-documents', destFolder, files),
+
   
 });

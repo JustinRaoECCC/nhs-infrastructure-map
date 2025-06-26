@@ -982,7 +982,7 @@ ipcMain.handle('get-station-file-details', async (event, stationId, stationDataF
 
   // 4) Continue to pick up the other sections from their usual subfolders
   const highPriorityRepairs = await listDirectoryContents(path.join(stationFolder, 'High Priority Repairs'));
-  const documents           = await listDirectoryContents(path.join(stationFolder, 'Documents'));
+  const documents = await listDirectoryContents(path.join(stationFolder, 'Documents'));
   const photos = await listDirectoryContentsRecursive(
     stationFolder,
     ['.jpg', '.jpeg', '.png', '.gif']
@@ -1484,6 +1484,38 @@ ipcMain.handle('add-photos', async (_evt, destFolder, filePaths) => {
     return { success: true };
   } catch (err) {
     console.error('add-photos error:', err);
+    return { success: false, message: err.message };
+  }
+});
+
+// 1) List only document files + all folders under a given path
+ipcMain.handle('list-document-contents', async (_evt, dirPath) => {
+  // restrict to your document extensions
+  const fileTypes = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.txt'];
+  return await listDirectoryContents(dirPath, fileTypes);
+});
+
+// 2) Let the user pick one or more document files
+ipcMain.handle('select-document-files', async () => {
+  const { canceled, filePaths } = await dialog.showOpenDialog({
+    properties: ['openFile', 'multiSelections'],
+    filters: [{ name: 'Documents', extensions: ['pdf','doc','docx','xls','xlsx','txt'] }]
+  });
+  return canceled ? [] : filePaths;
+});
+
+// 3) Copy those files into the destination folder
+ipcMain.handle('add-documents', async (_evt, destFolder, filePaths) => {
+  try {
+    // ensure the dest directory exists
+    await fsPromises.mkdir(destFolder, { recursive: true });
+    for (const src of filePaths) {
+      const name = path.basename(src);
+      await fsPromises.copyFile(src, path.join(destFolder, name));
+    }
+    return { success: true };
+  } catch (err) {
+    console.error('add-documents error:', err);
     return { success: false, message: err.message };
   }
 });

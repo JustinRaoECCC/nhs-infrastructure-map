@@ -97,7 +97,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   let isPriorityMapActive      = false;
 
   let currentPhotoFolder = null;
+  let currentDocumentFolder = null;
   let loadedPhotoGroups  = null;
+  let loadedDocumentGroups = null;
 
   // Photos stuff
   // ────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -151,6 +153,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     container.appendChild(grid);
   
+  }
+
+  // Documents
+  function groupDocuments(entries) {
+    const folders = [], files = [];
+    entries.forEach(e => {
+      if (e.isDirectory) folders.push(e);
+      else files.push(e);
+    });
+    return { folders, files };
   }
 
   // Render the thumbnails for one folder
@@ -1837,7 +1849,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       "No inspection history found."
     );
     await renderRepairsSection(detailSections.highPriorityRepairs, currentStationDetailData.stationId);
-    renderFileListSection(detailSections.documents, currentStationDetailData.documents, "No documents found.");
+    
+    loadedDocumentGroups   = null;
+    currentDocumentFolder  = null;
+    await renderDocumentsTab(
+      detailSections.documents,
+      currentStationDetailData.stationFolder
+    );
+
     await renderPhotosTab(currentStationDetailData.photos);
   }
 
@@ -2365,10 +2384,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             );
             break;
           case 'documents':
-            renderFileListSection(
+            // reset any previous “inside‐folder” state
+            loadedDocumentGroups  = null;
+            currentDocumentFolder = null;
+
+            // render the Documents tab from the station’s Documents root
+            await renderDocumentsTab(
               detailSections.documents,
-              currentStationDetailData.documents,
-              "No documents."
+              currentStationDetailData.stationFolder
             );
             break;
           case 'photos':
@@ -3252,6 +3275,278 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     };
   }
+
+  /**
+  * Recursively counts all non-directory files under dirPath
+  */
+  async function countDocuments(dirPath) {
+    let total = 0;
+    // list only docs & subfolders
+    const entries = await window.electronAPI.listDocumentContents(dirPath);
+    for (const e of entries) {
+      if (e.isDirectory) {
+        total += await countDocuments(e.path);
+      } else {
+        total++;
+      }
+    }
+    return total;
+  }
+
+   /**
+   * Render the “Documents” tab exactly like Photos:
+   * - folder cards for subfolders
+   * - 📄 thumbnails for files
+   * - drill-down/back support
+   */
+  async function renderDocumentsTab(container, stationFolder) {
+    container.innerHTML = '';
+
+    // 1) +Add Documents button
+    const addBtn = document.createElement('button');
+    addBtn.textContent = '+ Add Documents';
+    addBtn.style.display = 'block';
+    addBtn.style.margin = '12px 0';
+    addBtn.onclick = showAddDocumentsDialog;
+    container.appendChild(addBtn);
+
+    // 2) If inside a subfolder, show back + contents of that folder
+    if (currentDocumentFolder) {
+      console.log('[Docs] ▶ Inside subfolder:', currentDocumentFolder);
+
+      // ← Back button
+      const back = document.createElement('button');
+      back.textContent = '← Back to all documents';
+      back.style.marginBottom = '12px';
+      back.onclick = () => {
+        currentDocumentFolder = null;
+        renderDocumentsTab(container, stationFolder);
+      };
+      container.appendChild(back);
+
+      showLoadingMessage('Loading documents…');
+      const entries = await window.electronAPI.listDocumentContents(currentDocumentFolder);
+      hideLoadingMessage();
+
+      console.log('[Docs] entries from listDirectoryContents:', entries);
+
+      const { folders, files } = groupDocuments(entries);
+      console.log('[Docs] grouped → folders:', folders.map(f=>f.name), 'files:', files.map(f=>f.name));
+
+      // Sub-folder cards
+      if (folders.length) {
+        const grid = document.createElement('div');
+        grid.style = 'display:flex; flex-wrap:wrap; gap:16px;';
+        for (const f of folders) {
+          // 1) recursively count everything under here
+          const docCount = await countDocuments(f.path);
+
+          // 2) render card
+          const card = document.createElement('div');
+          card.style = 'border:1px solid #ccc; padding:12px; width:140px; text-align:center; cursor:pointer;';
+          card.innerHTML = `
+            <div style="font-size:2em;">📁</div>
+            <div style="margin-top:8px; word-break:break-word;">${f.name}</div>
+            <div style="margin-top:4px; font-size:0.9em; color:#555;">
+              ${docCount} document${docCount === 1 ? '' : 's'}
+            </div>
+          `;
+          card.onclick = () => {
+            currentDocumentFolder = f.path;
+            renderDocumentsTab(container, stationFolder);
+          };
+          grid.appendChild(card);
+        }
+        container.appendChild(grid);
+      }
+
+
+      // File thumbnails
+      if (files.length) {
+        const grid = document.createElement('div');
+        grid.style = 'display:flex; flex-wrap:wrap; gap:12px;';
+        files.forEach(file => {
+          const fileDiv = document.createElement('div');
+          fileDiv.style = 'width:120px; text-align:center; cursor:pointer;';
+          fileDiv.innerHTML = `
+            <div style="font-size:2em;">📄</div>
+            <div style="margin-top:4px; word-break:break-word;">${file.name}</div>`;
+          fileDiv.onclick = () => window.electronAPI.openFile(file.path);
+          grid.appendChild(fileDiv);
+        });
+        container.appendChild(grid);
+      }
+
+      return;
+    }
+
+    // 3) Top-level station folder (no longer hard-coded “…/Documents”)
+    const docsRoot = stationFolder;
+    console.log('[Docs] ▶ Top-level docsRoot =', docsRoot);
+
+    showLoadingMessage('Loading documents…');
+    let entries = [];
+    try {
+      entries = await window.electronAPI.listDocumentContents(docsRoot);
+    } catch (err) {
+      console.error('[Docs] error listing:', err);
+    }
+    hideLoadingMessage();
+
+    console.log('[Docs] entries at top-level:', entries);
+
+    const { folders, files } = groupDocuments(entries);
+    console.log('[Docs] grouped → folders:', folders.map(f=>f.name), 'files:', files.map(f=>f.name));
+
+    // Folder cards
+    if (folders.length) {
+      const grid = document.createElement('div');
+      grid.style = 'display:flex; flex-wrap:wrap; gap:16px; margin-bottom:16px;';
+      for (const f of folders) {
+        const docCount = await countDocuments(f.path);
+        const card = document.createElement('div');
+        card.style = 'border:1px solid #ccc; padding:12px; width:140px; text-align:center; cursor:pointer;';
+        card.innerHTML = `
+          <div style="font-size:2em;">📁</div>
+          <div style="margin-top:8px; word-break:break-word;">${f.name}</div>
+          <div style="margin-top:4px; font-size:0.9em; color:#555;">
+            ${docCount} document${docCount === 1 ? '' : 's'}
+          </div>
+        `;
+        card.onclick = () => {
+          currentDocumentFolder = f.path;
+          renderDocumentsTab(container, stationFolder);
+        };
+        grid.appendChild(card);
+      }
+      container.appendChild(grid);
+    }
+
+    // Root-level files
+    if (files.length) {
+      const grid = document.createElement('div');
+      grid.style = 'display:flex; flex-wrap:wrap; gap:12px; margin-top:16px;';
+      files.forEach(file => {
+        const fileDiv = document.createElement('div');
+        fileDiv.style = 'width:120px; text-align:center; cursor:pointer;';
+        fileDiv.innerHTML = `
+          <div style="font-size:2em;">📄</div>
+          <div style="margin-top:4px; word-break:break-word;">${file.name}</div>`;
+        fileDiv.onclick = () => window.electronAPI.openFile(file.path);
+        grid.appendChild(fileDiv);
+      });
+      container.appendChild(grid);
+    }
+  }
+
+
+  async function showAddDocumentsDialog() {
+    console.log('[AddDocuments] 🚀 showAddDocumentsDialog invoked');
+
+    // 1) Overlay
+    const overlay = document.createElement('div');
+    overlay.style = `
+      position:fixed; top:0; left:0; right:0; bottom:0;
+      background:rgba(0,0,0,0.5); display:flex;
+      align-items:center; justify-content:center; z-index:10000;
+    `;
+    document.body.appendChild(overlay);
+
+    // 2) Dialog
+    const box = document.createElement('div');
+    box.style = 'background:white; padding:20px; border-radius:6px; width:320px;';
+    box.innerHTML = `
+      <h3 style="margin-top:0;">Select Destination for Documents</h3>
+      <div>
+        <label><input type="radio" name="destDoc" value="existing" checked> Existing folder</label><br>
+        <select id="existingDocFolderSelect" style="width:100%; margin:6px 0;"></select>
+      </div>
+      <div>
+        <label><input type="radio" name="destDoc" value="new"> New folder</label><br>
+        <input type="text" id="newDocFolderName"
+              placeholder="Folder name"
+              style="width:100%; margin:6px 0;" disabled>
+      </div>
+      <div>
+        <label><input type="radio" name="destDoc" value="root"> Documents root</label>
+      </div>
+      <div style="text-align:right; margin-top:12px;">
+        <button id="cancelAddDocuments">Cancel</button>
+        <button id="okAddDocuments">Next →</button>
+      </div>
+    `;
+    overlay.appendChild(box);
+
+    // 3) Fetch & populate existing subfolders 
+    const root = currentStationDetailData.stationFolder;
+    console.log('[AddDocuments] ▶ showAddDocumentsDialog called');
+    console.log('[AddDocuments]    stationFolder       =', currentStationDetailData.stationFolder);
+    console.log('[AddDocuments]    using documentsRoot =', root);
+    let subs = [];
+    try {
+      const entries = await window.electronAPI.listDocumentContents(root);
+      subs = entries.filter(e => e.isDirectory).map(e => e.name);
+    } catch (err) {
+      console.error('[AddDocuments] error listing subfolders:', err);
+    }
+    console.log('[AddDocuments]    listDirectoryContents returned subs =', subs);
+    const sel = box.querySelector('#existingDocFolderSelect');
+    subs.forEach(name => {
+      const o = document.createElement('option');
+      o.value = name; o.textContent = name;
+      sel.appendChild(o);
+    });
+
+    // 4) Radio buttons enable/disable new-folder input
+    const newInput = box.querySelector('#newDocFolderName');
+    box.querySelectorAll('input[name="destDoc"]').forEach(radio => {
+      radio.addEventListener('change', () => {
+        newInput.disabled = (radio.value !== 'new');
+      });
+    });
+
+    // 5) Cancel
+    box.querySelector('#cancelAddDocuments').onclick = () => {
+      console.log('[AddDocuments] Cancel clicked');
+      overlay.remove();
+    };
+
+    // 6) Next → pick files, copy, toast, re-render
+    box.querySelector('#okAddDocuments').onclick = async () => {
+      const choice = box.querySelector('input[name="destDoc"]:checked').value;
+      let dest = root;
+      if (choice === 'existing') {
+        dest = `${root}/${sel.value}`;
+      } else if (choice === 'new') {
+        const nm = newInput.value.trim();
+        if (!nm) {
+          alert('Please type a folder name.');
+          return;
+        }
+        dest = `${root}/${nm}`;
+      }
+      console.log('[AddDocuments] destFolder =', dest);
+      overlay.remove();
+
+      // reuse file-picker but allow all documents
+      const files = await window.electronAPI.selectDocumentFiles();
+      if (!files.length) return;
+      showLoadingMessage('Adding documents…');
+      const res = await window.electronAPI.addDocuments(dest, files);
+      hideLoadingMessage();
+
+      if (!res.success) {
+        alert(`Error adding documents: ${res.message}`);
+      } else {
+        showSuccess('Documents saved!', 1500);
+        // clear any cache & re-render documents tab in-place:
+        loadedDocumentGroups = null;
+        currentDocumentFolder = null;
+        // switch to documents tab:
+        document.querySelector('.detail-nav-btn[data-section="documents"]').click();
+      }
+    };
+  }  
 }); // end DOMContentLoaded
 
 
