@@ -2150,10 +2150,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 1) wipe out any old content
     container.innerHTML = '';
 
-    // 2) ➕ Add Photos button (always shown)
+    // 2) + Add Photos button (always shown)
     const addBtn = document.createElement('button');
     addBtn.id          = 'btnAddPhotos';
-    addBtn.textContent = '➕ Add Photos';
+    addBtn.textContent = '+ Add Photos';
     addBtn.style.display = 'block';
     addBtn.style.margin  = '12px 0';
     addBtn.addEventListener('click', showAddPhotosDialog);
@@ -2327,7 +2327,7 @@ document.addEventListener('DOMContentLoaded', async () => {
               if (old) old.remove();
               const btn = document.createElement('button');
               btn.id          = 'btnAddPhotos';
-              btn.textContent = '➕ Add Photos';
+              btn.textContent = '+ Add Photos';
               btn.style.margin = '10px 0';
               btn.onclick     = showAddPhotosDialog;
               detailSections.photos.appendChild(btn);
@@ -2388,7 +2388,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       const { success, message } = await window.electronAPI.downloadWindowAsPDF();
       if (success) {
-        showAlert(`✅ Saved PDF to:\n${message}`);
+        showSuccess(`✅ Saved PDF to:\n${message}`);
       } else if (message !== 'Save cancelled.') {
         showAlert(`⚠️ ${message}`);
       }

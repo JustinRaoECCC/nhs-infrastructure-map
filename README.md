@@ -151,7 +151,8 @@ June 25th, 2025
 * Need to hook up the file system with the program and integrate user interactivity (make sure the switch to compatability with sharepoint is easy)
 
 - Currently the add photos button doesnt work
-- Delete doesnt work
+- Only show Repair Information if there is a repair needed
+
 ---
 
 ## Roadmap
