@@ -2146,23 +2146,21 @@ document.addEventListener('DOMContentLoaded', async () => {
   async function renderPhotosTab(items) {
     console.log('▶️ renderPhotosTab called, currentPhotoFolder=', currentPhotoFolder);
     const container = detailSections.photos;
-
-    // 1) wipe out any old content
     container.innerHTML = '';
 
-    // 2) + Add Photos button (always shown)
+    // 1) Always show the Add Photos button at top
     const addBtn = document.createElement('button');
-    addBtn.id          = 'btnAddPhotos';
+    addBtn.id = 'btnAddPhotos';
     addBtn.textContent = '+ Add Photos';
     addBtn.style.display = 'block';
-    addBtn.style.margin  = '12px 0';
-    addBtn.addEventListener('click', showAddPhotosDialog);
+    addBtn.style.margin = '12px 0';
+    addBtn.onclick = showAddPhotosDialog;
     container.appendChild(addBtn);
 
-    // 3) Back to folders button (only if we're already inside one)
+    // 2) If inside a folder, show Back button
     if (currentPhotoFolder) {
       const back = document.createElement('button');
-      back.textContent     = '← Back to folders';
+      back.textContent = '← Back to folders';
       back.style.marginBottom = '12px';
       back.onclick = () => {
         currentPhotoFolder = null;
@@ -2171,60 +2169,67 @@ document.addEventListener('DOMContentLoaded', async () => {
       container.appendChild(back);
     }
 
-    // 4) Render either top‐level folders or thumbnails
+    // 3) Top-level view: folder cards + any root-level images
     if (!currentPhotoFolder) {
-      // Top-level: show the folder cards
+      // Folder cards
       const folders = items.filter(i => i.isDirectory);
-      if (!folders.length) {
-        container.innerHTML += '<p>No sub-folders found.</p>';
-        return;
+      if (folders.length) {
+        const grid = document.createElement('div');
+        grid.style = 'display:flex; flex-wrap:wrap; gap:16px;';
+        folders.forEach(f => {
+          const card = document.createElement('div');
+          card.style = 'border:1px solid #ccc; padding:12px; width:140px; text-align:center; cursor:pointer;';
+          card.innerHTML = `
+            <div style="font-size:2em;">📁</div>
+            <div style="margin-top:8px; word-break:break-word;">${f.name}</div>
+          `;
+          card.onclick = async () => {
+            currentPhotoFolder = f.path;
+            const sub = await window.electronAPI.listDirectoryContents(f.path);
+            renderPhotosTab(sub);
+          };
+          grid.appendChild(card);
+        });
+        container.appendChild(grid);
       }
-      const grid = document.createElement('div');
-      grid.style.display    = 'flex';
-      grid.style.flexWrap   = 'wrap';
-      grid.style.gap        = '16px';
-      folders.forEach(f => {
-        const card = document.createElement('div');
-        card.style.border     = '1px solid #ccc';
-        card.style.padding    = '12px';
-        card.style.width      = '140px';
-        card.style.textAlign  = 'center';
-        card.style.cursor     = 'pointer';
-        card.innerHTML = `
-          <div style="font-size:2em;">📁</div>
-          <div style="margin-top:8px; word-break:break-word;">${f.name}</div>
-          <div style="font-size:0.9em; color:#555;">${f.count || ''} photos</div>
-        `.trim();
-        card.onclick = async () => {
-          currentPhotoFolder = f.path;
-          const sub = await window.electronAPI.listDirectoryContents(f.path);
-          renderPhotosTab(sub);
-        };
-        grid.appendChild(card);
-      });
-      container.appendChild(grid);
+
+      // Root-level image thumbnails
+      const rootImages = items.filter(i => 
+        !i.isDirectory && 
+        // direct children: no extra slash after stationFolder
+        !/[\/\\]/.test(i.path.slice(currentStationDetailData.stationFolder.length + 1))
+      );
+      if (rootImages.length) {
+        const grid = document.createElement('div');
+        grid.style = 'display:flex; flex-wrap:wrap; gap:12px; margin-top:16px;';
+        rootImages.forEach(imgItem => {
+          const thumb = document.createElement('img');
+          thumb.src = `file://${imgItem.path}`;
+          thumb.alt = imgItem.name;
+          thumb.title = imgItem.name;
+          thumb.style = 'width:120px; height:120px; object-fit:cover; cursor:pointer;';
+          thumb.onclick = () => showImageOverlay(imgItem);
+          grid.appendChild(thumb);
+        });
+        container.appendChild(grid);
+      }
 
     } else {
-      // Inside a folder: show its images
+      // 4) Inside a folder: just thumbs
       const images = items.filter(i => !i.isDirectory);
       if (!images.length) {
         container.innerHTML += '<p>No images in this folder.</p>';
         return;
       }
       const grid = document.createElement('div');
-      grid.style.display    = 'flex';
-      grid.style.flexWrap   = 'wrap';
-      grid.style.gap        = '12px';
+      grid.style = 'display:flex; flex-wrap:wrap; gap:12px;';
       images.forEach(imgItem => {
         const thumb = document.createElement('img');
-        thumb.src       = `file://${imgItem.path}`;
-        thumb.alt       = imgItem.name;
-        thumb.title     = imgItem.name;
-        thumb.style.width       = '120px';
-        thumb.style.height      = '120px';
-        thumb.style.objectFit   = 'cover';
-        thumb.style.cursor      = 'pointer';
-        thumb.onclick   = () => showImageOverlay(imgItem);
+        thumb.src = `file://${imgItem.path}`;
+        thumb.alt = imgItem.name;
+        thumb.title = imgItem.name;
+        thumb.style = 'width:120px; height:120px; object-fit:cover; cursor:pointer;';
+        thumb.onclick = () => showImageOverlay(imgItem);
         grid.appendChild(thumb);
       });
       container.appendChild(grid);
@@ -2293,10 +2298,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             );
             break;
           case 'photos':
-            // On first entry, load & group all images by top-level folder
+            // On first entry, load & group all images by top-level folder,
+            // but also collect root-level images separately:
             if (!loadedPhotoGroups) {
               showLoadingMessage('Loading photos, please wait…');
-              // recursive fetch of every image+folder under the station folder
               const allItems = await window.electronAPI
                 .listDirectoryContentsRecursive(currentStationDetailData.stationFolder);
               hideLoadingMessage();
@@ -2304,35 +2309,65 @@ document.addEventListener('DOMContentLoaded', async () => {
               // flatten to image files only
               const imageFiles = allItems.filter(i => !i.isDirectory);
 
-              // group by first directory under stationFolder
+              // group into sub-folders vs root images
               loadedPhotoGroups = {};
+              const rootImages = [];
               imageFiles.forEach(f => {
-                // remove the leading slash/backslash after stationFolder
+                // relative path after stationFolder
                 const rel = f.path.slice(
                   currentStationDetailData.stationFolder.length + 1
                 );
-                // split on both "/" and "\" and take the first piece
-                const top = rel.split(/[/\\]/)[0] || '';
-                if (!loadedPhotoGroups[top]) loadedPhotoGroups[top] = [];
-                loadedPhotoGroups[top].push(f);
+                const parts = rel.split(/[/\\]/);
+                if (parts.length === 1) {
+                  // no slash ⇒ file in the root
+                  rootImages.push(f);
+                } else {
+                  // first segment is the sub-folder
+                  const top = parts[0] || '';
+                  if (!loadedPhotoGroups[top]) loadedPhotoGroups[top] = [];
+                  loadedPhotoGroups[top].push(f);
+                }
               });
 
-              // remove any empty-group key (just in case)
-              delete loadedPhotoGroups[''];
-            }
-            // render the folder cards
-            renderPhotoGroups(loadedPhotoGroups);
-            {
-              const old = detailSections.photos.querySelector('#btnAddPhotos');
-              if (old) old.remove();
-              const btn = document.createElement('button');
-              btn.id          = 'btnAddPhotos';
-              btn.textContent = '+ Add Photos';
-              btn.style.margin = '10px 0';
-              btn.onclick     = showAddPhotosDialog;
-              detailSections.photos.appendChild(btn);
+              // 1) render folder cards
+              renderPhotoGroups(loadedPhotoGroups);
+
+              // 2) render root-level images (thumbnails) below folders
+              if (rootImages.length) {
+                const imgGrid = document.createElement('div');
+                imgGrid.style.display = 'flex';
+                imgGrid.style.flexWrap = 'wrap';
+                imgGrid.style.gap = '12px';
+                imgGrid.style.marginTop = '16px';
+                rootImages.forEach(imgItem => {
+                  const thumb = document.createElement('img');
+                  thumb.src = `file://${imgItem.path}`;
+                  thumb.alt = imgItem.name;
+                  thumb.title = imgItem.name;
+                  thumb.style.width = '120px';
+                  thumb.style.height = '120px';
+                  thumb.style.objectFit = 'cover';
+                  thumb.style.cursor = 'pointer';
+                  thumb.onclick = () => showImageOverlay(imgItem);
+                  imgGrid.appendChild(thumb);
+                });
+                detailSections.photos.appendChild(imgGrid);
+              }
+
+              // 3) “Add Photos” button at the end (always visible)
+              {
+                const old = detailSections.photos.querySelector('#btnAddPhotos');
+                if (old) old.remove();
+                const btn = document.createElement('button');
+                btn.id          = 'btnAddPhotos';
+                btn.textContent = '➕ Add Photos';
+                btn.style.margin = '10px 0';
+                btn.onclick     = showAddPhotosDialog;
+                detailSections.photos.appendChild(btn);
+              }
             }
             break;
+
         }
       }
     });
@@ -3036,6 +3071,113 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
 
+  /**
+   * Shows a modal to choose:
+   *  • which folder (existing/new/root) to add into,
+   *  • then pick files,
+   *  • then copy via electronAPI.addPhotos().
+   */
+  async function showAddPhotosDialog() {
+    console.log('[AddPhotos] 🚀 showAddPhotosDialog invoked');
+
+    // 1) Overlay
+    const overlay = document.createElement('div');
+    overlay.style = `
+      position:fixed; top:0; left:0; right:0; bottom:0;
+      background:rgba(0,0,0,0.5); display:flex;
+      align-items:center; justify-content:center; z-index:10000;
+    `;
+    document.body.appendChild(overlay);
+
+    // 2) Dialog
+    const box = document.createElement('div');
+    box.style = 'background:white; padding:20px; border-radius:6px; width:320px;';
+    box.innerHTML = `
+      <h3 style="margin-top:0;">Select Destination</h3>
+      <div>
+        <label><input type="radio" name="dest" value="existing" checked> Existing folder</label><br>
+        <select id="existingFolderSelect" style="width:100%; margin:6px 0;"></select>
+      </div>
+      <div>
+        <label><input type="radio" name="dest" value="new"> New folder</label><br>
+        <input type="text" id="newFolderName" placeholder="Folder name"
+              style="width:100%; margin:6px 0;" disabled>
+      </div>
+      <div>
+        <label><input type="radio" name="dest" value="root"> Station root</label>
+      </div>
+      <div style="text-align:right; margin-top:12px;">
+        <button id="cancelAddPhotos">Cancel</button>
+        <button id="okAddPhotos">Next →</button>
+      </div>
+    `;
+    overlay.appendChild(box);
+
+    // 3) Fetch & populate existing subfolders
+    const root = currentStationDetailData.stationFolder;
+    console.log('[AddPhotos] stationFolder =', root);
+    let subs = [];
+    try {
+      const entries = await window.electronAPI.listDirectoryContents(root);
+      subs = entries.filter(e=>e.isDirectory).map(e=>e.name);
+    } catch (err) {
+      console.error('[AddPhotos] error listing subfolders:', err);
+    }
+    const sel = box.querySelector('#existingFolderSelect');
+    subs.forEach(name => {
+      const o = document.createElement('option');
+      o.value = name; o.textContent = name;
+      sel.appendChild(o);
+    });
+
+    // 4) Radio buttons enable/disable new-folder input
+    const newInput = box.querySelector('#newFolderName');
+    box.querySelectorAll('input[name="dest"]').forEach(radio => {
+      radio.addEventListener('change', () => {
+        newInput.disabled = (radio.value !== 'new');
+      });
+    });
+
+    // 5) Cancel
+    box.querySelector('#cancelAddPhotos').onclick = () => {
+      console.log('[AddPhotos] Cancel clicked');
+      overlay.remove();
+    };
+
+    // 6) Next → pick files, copy, toast, re-render
+    box.querySelector('#okAddPhotos').onclick = async () => {
+      const choice = box.querySelector('input[name="dest"]:checked').value;
+      let dest = root;
+      if (choice === 'existing') {
+        dest = `${root}/${sel.value}`;
+      } else if (choice === 'new') {
+        const nm = newInput.value.trim();
+        if (!nm) {
+          alert('Please type a folder name.');
+          return;
+        }
+        dest = `${root}/${nm}`;
+      }
+      console.log('[AddPhotos] destFolder =', dest);
+      overlay.remove();
+
+      const files = await window.electronAPI.selectPhotoFiles();
+      if (!files.length) return;
+      showLoadingMessage('Adding photos…');
+      const res = await window.electronAPI.addPhotos(dest, files);
+      hideLoadingMessage();
+
+      if (!res.success) {
+        alert(`Error adding photos: ${res.message}`);
+      } else {
+        showSuccess('Photos saved!', 1500);
+        // clear cache & re-render photos tab in-place:
+        loadedPhotoGroups = null;
+        // programmatically switch to photos tab:
+        document.querySelector('.detail-nav-btn[data-section="photos"]').click();
+      }
+    };
+  }
 }); // end DOMContentLoaded
 
 
@@ -3059,106 +3201,4 @@ function getComboColor(category, province) {
     comboColorMap[key] = PALETTE[ comboNextIndex++ % PALETTE.length ];
   }
   return comboColorMap[key];
-}
-
-
-/**
- * Shows a modal to choose:
- *  • which folder (existing/new/root) to add into,
- *  • then pick files,
- *  • then copy via electronAPI.addPhotos().
- */
-async function showAddPhotosDialog() {
-  // Build overlay
-  const overlay = document.createElement('div');
-  overlay.style = `
-    position:fixed; top:0; left:0; right:0; bottom:0;
-    background:rgba(0,0,0,0.5); display:flex;
-    align-items:center; justify-content:center; z-index:10000;
-  `;
-  document.body.appendChild(overlay);
-
-  // Modal box
-  const box = document.createElement('div');
-  box.style = 'background:white; padding:20px; border-radius:6px; width:300px;';
-  box.innerHTML = `
-    <h3>Select Destination</h3>
-    <div>
-      <label><input type="radio" name="dest" value="existing" checked> Existing folder</label>
-      <select id="existingFolderSelect" style="width:100%; margin:6px 0;"></select>
-    </div>
-    <div>
-      <label><input type="radio" name="dest" value="new"> New folder</label>
-      <input type="text" id="newFolderName" placeholder="Folder name" style="width:100%; margin:6px 0;" disabled>
-    </div>
-    <div>
-      <label><input type="radio" name="dest" value="root"> Station root</label>
-    </div>
-    <div style="text-align:right; margin-top:12px;">
-      <button id="cancelAddPhotos">Cancel</button>
-      <button id="okAddPhotos">Next →</button>
-    </div>
-  `;
-  overlay.appendChild(box);
-
-  // Populate existing‐folder dropdown
-  const select = box.querySelector('#existingFolderSelect');
-  Object.keys(loadedPhotoGroups).forEach(name => {
-    const opt = document.createElement('option');
-    opt.value = name;
-    opt.textContent = name;
-    select.appendChild(opt);
-  });
-
-  // Radio logic
-  const radios = box.querySelectorAll('input[name="dest"]');
-  const newNameInput = box.querySelector('#newFolderName');
-  radios.forEach(r => {
-    r.addEventListener('change', () => {
-      newNameInput.disabled = (r.value !== 'new');
-    });
-  });
-
-  // Cancel
-  box.querySelector('#cancelAddPhotos').onclick = () => {
-    overlay.remove();
-  };
-
-  // OK → file picker
-  box.querySelector('#okAddPhotos').onclick = async () => {
-    // Determine destination path
-    const choice = box.querySelector('input[name="dest"]:checked').value;
-    let destFolder = currentStationDetailData.stationFolder;
-    if (choice === 'existing') {
-      destFolder = path.join(destFolder, select.value);
-    } else if (choice === 'new') {
-      const name = newNameInput.value.trim();
-      if (!name) {
-        alert('Please enter a new folder name.');
-        return;
-      }
-      destFolder = path.join(destFolder, name);
-    }
-    overlay.remove();
-
-    // Ask user to pick files
-    const files = await window.electronAPI.selectPhotoFiles();
-    if (files.length === 0) return;
-
-    showLoadingMessage('Adding photos…');
-    const result = await window.electronAPI.addPhotos(destFolder, files);
-    hideLoadingMessage();
-
-    if (!result.success) {
-      alert('Error adding photos: ' + result.message);
-      return;
-    }
-
-    // Clear cache + re-render current view
-    loadedPhotoGroups = null;
-    // re-trigger the Photos tab logic:
-    document
-      .querySelector('.detail-nav-btn[data-section="photos"]')
-      .click();
-  };
 }
