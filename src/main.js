@@ -712,28 +712,63 @@ ipcMain.handle('save-station-data', async (_event, updatedStation) => {
     );
     const targetHeaders = Array.from(new Set([ ...CORE, ...allKeys ]));
 
-    // 5) Sync headers across every sheet: drop extras, add missing
-    wbNew.worksheets.forEach(ws => {
-  
-      // 5b) Re-read the *current* headers from row 2
-      let currentHeaders = ws.getRow(2)
-                            .values
-                            .slice(1)
-                            .map(v => String(v || '').trim());
+       // 5) Sync headers across every sheet: drop extras, then add missing
+    {
+      // Define your 8 core columns
+      const CORE = new Set([
+        'Station ID','Asset Type','Site Name',
+        'Province','Latitude','Longitude',
+        'Status','Repair Ranking'
+      ]);
 
-      // 5c) Append any that are still missing
-      targetHeaders.forEach(hdr => {
-        if (!currentHeaders.includes(hdr)) {
-          const colIdx = currentHeaders.length + 1;
-          ws.spliceColumns(colIdx, 0, []);
-          const cell = ws.getRow(2).getCell(colIdx);
-          cell.value     = hdr;
-          cell.font      = { bold: true };
-          cell.alignment = { horizontal: 'left', vertical: 'middle' };
-          currentHeaders.push(hdr);
-        }
+      // Read the “before” dynamic headers from the first sheet
+      const before = wbNew.worksheets[0].getRow(2).values
+        .slice(1)                        // drop dummy 0 index
+        .map(v => String(v||'').trim())
+        .filter(h => h && !CORE.has(h));
+
+      // Compute the “after” headers you actually want
+      const after = Object.keys(updatedStation)
+        .filter(k => !['stationId','stationName','latitude','longitude','category'].includes(k));
+      const targetHeaders = [ ...CORE, ...after ];
+
+      // Now for each sheet: 1) remove any column in `before` that isn’t in `after`, 2) add any missing
+      wbNew.worksheets.forEach(ws => {
+        // — 1) DROP removed columns —
+        before.forEach(hdr => {
+          if (!targetHeaders.includes(hdr)) {
+            // find its column index in row 2
+            let colToRemove = null;
+            ws.getRow(2).eachCell((cell, idx) => {
+              if (String(cell.value||'').trim() === hdr) {
+                colToRemove = idx;
+              }
+            });
+            if (colToRemove !== null) {
+              ws.spliceColumns(colToRemove, 1);
+            }
+          }
+        });
+
+        // — 2) RE-READ headers now that we’ve dropped some —
+        const current = ws.getRow(2).values
+          .slice(1)
+          .map(v => String(v||'').trim());
+
+        // — 3) APPEND any that are still missing —
+        targetHeaders.forEach(hdr => {
+          if (!current.includes(hdr)) {
+            const newCol = current.length + 1;
+            ws.spliceColumns(newCol, 0, []);
+            const cell = ws.getRow(2).getCell(newCol);
+            cell.value     = hdr;
+            cell.font      = { bold: true };
+            cell.alignment = { horizontal: 'left', vertical: 'middle' };
+            current.push(hdr);
+          }
+        });
       });
-    });
+    }
 
 
 
