@@ -1095,14 +1095,27 @@ ipcMain.handle('download-window-pdf', async () => {
  */
 ipcMain.handle('delete-all-data-files', async () => {
   try {
+    // 1) Delete all .xlsx in the main data folder
     const files = fsSync.readdirSync(DATA_DIR);
     for (const f of files) {
       if (f.toLowerCase().endsWith('.xlsx')) {
         fsSync.unlinkSync(path.join(DATA_DIR, f));
       }
     }
+
+    // 2) Delete all .xlsx in the repairs sub-folder (if it exists)
+    if (fsSync.existsSync(REPAIRS_DIR)) {
+      const repairs = fsSync.readdirSync(REPAIRS_DIR);
+      for (const f of repairs) {
+        if (f.toLowerCase().endsWith('.xlsx')) {
+          fsSync.unlinkSync(path.join(REPAIRS_DIR, f));
+        }
+      }
+    }
+
+    // 3) Relaunch the app with a clean slate
     app.relaunch();
-    app.exit(0)
+    app.exit(0);
   } catch (err) {
     console.error('delete-all-data-files error:', err);
     return { success: false, message: err.message };
