@@ -138,19 +138,23 @@ nhs-infrastructure-map/
 ## Current Bugs / TODO List
 
 
-June 25th, 2025
+June 27th, 2025
+
+
+Repairs are not required
+Repair was randomly there
+Creating a station auto creates a station folder in the file system
+
+
 
 
 * figure out sort by frequency meaning
 * Impliment the calculation for determining what should be the order of repairs (Sort by: Repair Priority) -->  Out of 100, it's somthing like x times 0.3 + y times 0.5 + z times 0.2
 
 * active becomes inactive issue
-* imported ACTIVE should become Active
 * imported NAME should become Name (maybe)
 
-* Need to hook up the file system with the program and integrate user interactivity (make sure the switch to compatability with sharepoint is easy)
 
-- Currently the add photos button doesnt work
 - Only show Repair Information if there is a repair needed
 
 ---
