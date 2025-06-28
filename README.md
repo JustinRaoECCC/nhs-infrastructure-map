@@ -141,6 +141,8 @@ nhs-infrastructure-map/
 June 27th, 2025
 
 
+- Be able to delete a station (unlock)
+
 Repairs are not required
 Repair was randomly there
 Creating a station auto creates a station folder in the file system
