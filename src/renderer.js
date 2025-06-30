@@ -1155,46 +1155,61 @@ document.addEventListener('DOMContentLoaded', async () => {
     // ─────────────────────────────────────────────────────────────────────────────
     // 2) READ-ONLY “Repair Information” box
     // ─────────────────────────────────────────────────────────────────────────────
-    const repairSectionDiv = document.createElement('div');
-    repairSectionDiv.classList.add('quick-section');
-    repairSectionDiv.style.border = '1px solid #ccc';
-    repairSectionDiv.style.padding = '8px';
-    repairSectionDiv.style.marginBottom = '10px';
-    repairSectionDiv.dataset.sectionName = 'Repair Information';
+    // Only show repair info if at least one field is non‐blank / non‐zero
+    const hasRepairInfo = [
+      station['Repair Ranking'],
+      station['Repair Cost'],
+      station['Frequency']
+    ].some(val =>
+      // must exist
+      val != null
+      // non-empty string
+      && (typeof val !== 'string' || val.trim() !== '')
+      // non-zero number
+      && (typeof val !== 'number' || val !== 0)
+    );
 
-    const repairTitle = document.createElement('div');
-    repairTitle.style.fontWeight = 'bold';
-    repairTitle.textContent = 'Repair Information';
-    repairSectionDiv.appendChild(repairTitle);
+    if (hasRepairInfo) {
+      const repairSectionDiv = document.createElement('div');
+      repairSectionDiv.classList.add('quick-section');
+      repairSectionDiv.style.border = '1px solid #ccc';
+      repairSectionDiv.style.padding = '8px';
+      repairSectionDiv.style.marginBottom = '10px';
+      repairSectionDiv.dataset.sectionName = 'Repair Information';
 
-    // helper to add a read-only field
-    function addRepairField(labelText, value) {
-      const rowDiv = document.createElement('div');
-      rowDiv.style.display = 'flex';
-      rowDiv.style.marginTop = '4px';
-      rowDiv.style.alignItems = 'center';
+      const repairTitle = document.createElement('div');
+      repairTitle.style.fontWeight = 'bold';
+      repairTitle.textContent = 'Repair Information';
+      repairSectionDiv.appendChild(repairTitle);
 
-      const label = document.createElement('label');
-      label.textContent = `${labelText}:`;
-      label.style.flex = '0 0 140px';
-      label.style.fontWeight = '600';
-      rowDiv.appendChild(label);
+      function addRepairField(labelText, value) {
+        const rowDiv = document.createElement('div');
+        rowDiv.style.display = 'flex';
+        rowDiv.style.marginTop = '4px';
+        rowDiv.style.alignItems = 'center';
 
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.value = value != null ? String(value) : '';
-      input.disabled = true;
-      input.style.flex = '1';
-      rowDiv.appendChild(input);
+        const label = document.createElement('label');
+        label.textContent = `${labelText}:`;
+        label.style.flex = '0 0 140px';
+        label.style.fontWeight = '600';
+        rowDiv.appendChild(label);
 
-      repairSectionDiv.appendChild(rowDiv);
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = value != null ? String(value) : '';
+        input.disabled = true;
+        input.style.flex = '1';
+        rowDiv.appendChild(input);
+
+        repairSectionDiv.appendChild(rowDiv);
+      }
+
+      addRepairField('Repair Ranking', station['Repair Ranking'] || '');
+      addRepairField('Repair Cost ($)', station['Repair Cost'] || '');
+      addRepairField('Frequency', station['Frequency'] || '');
+
+      detailsPanelContent.appendChild(repairSectionDiv);
     }
-
-    addRepairField('Repair Ranking', station['Repair Ranking'] || '');
-    addRepairField('Repair Cost ($)', station['Repair Cost']   || '');
-    addRepairField('Frequency',      station['Frequency']      || '');
-
-    detailsPanelContent.appendChild(repairSectionDiv);
 
     // ─────────────────────────────────────────────────────────────────────────────
     // 2) READ-ONLY “Extra Sections” (if any)

@@ -138,26 +138,28 @@ nhs-infrastructure-map/
 ## Current Bugs / TODO List
 
 
-June 27th, 2025
+2. Only show Repair Information if there is a repair needed
+3. Active becomes inactive
+4. Specify what the user should be intering for frequency (dropdown for the unit)
+5. Repairs are not necessary (same Add Infrastructure format as Section- Field)
+6. Creating a station auto creates a station older in the file system of format: AKIE_RIVER_NEAR_THE_760_M_CONTOUR_07EA007
+7. Be able to delete a station (admin contol)
+8. Be able to create a folder as an inspection (based off of the name convention) and be able to upload documents/photos to it
+  - First 6 photos displayed only
+  - Follow photo Khodi sent as a template
+  - Next inspection date is coming from inspection frequency
+9. Fix up documents tab
+
+ADMIN CONTROl
+- Log in as Admin OR Log in as Guest
+- Admin login requires ECCC email, Password (hard coded in the backend)
 
 
-- Be able to delete a station (unlock)
 
-Repairs are not required
-Repair was randomly there
-Creating a station auto creates a station folder in the file system
-
-
-
-
-* figure out sort by frequency meaning
 * Impliment the calculation for determining what should be the order of repairs (Sort by: Repair Priority) -->  Out of 100, it's somthing like x times 0.3 + y times 0.5 + z times 0.2
 
-* active becomes inactive issue
-* imported NAME should become Name (maybe)
 
 
-- Only show Repair Information if there is a repair needed
 
 ---
 
@@ -170,3 +172,6 @@ Creating a station auto creates a station folder in the file system
 ---
 
 ## Contributing
+
+
+TOdo
