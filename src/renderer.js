@@ -633,7 +633,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         updateActiveViewDisplay();
       };
       mainLbl.appendChild(mainChk);
-      mainLbl.appendChild(document.createTextNode(` ${cat} (All)`));
+      mainLbl.appendChild(document.createTextNode(` ${cat} `));
       groupDiv.appendChild(mainLbl);
 
       // sub-checkboxes by province
@@ -1148,7 +1148,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     addReadOnlyField('Latitude',         station.latitude  || station.Latitude);
     addReadOnlyField('Longitude',        station.longitude || station.Longitude);
     addReadOnlyField('Status',           station.Status);
-    addReadOnlyField('Repair Ranking',  station['Repair Ranking']);
 
     detailsPanelContent.appendChild(generalSectionDiv);
 
@@ -2538,22 +2537,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   const inputStationId         = document.getElementById('inputStationId');
   const inputSiteName          = document.getElementById('inputSiteName');
   const inputStatus            = document.getElementById('inputStatus');
-  const selectRepairRanking  = document.getElementById('selectRepairRanking');
   const inputLatitude          = document.getElementById('inputLatitude');
   const inputLongitude         = document.getElementById('inputLongitude');
   const btnSaveGeneralInfo     = document.getElementById('btnSaveGeneralInfo');
   const modalExtraSectionsContainer = document.getElementById('modalExtraSectionsContainer');
   const btnAddSectionModal     = document.getElementById('btnAddSection');
   const btnCreateStation       = document.getElementById('btnCreateStation');
+  const btnAddRepairModal = document.getElementById('btnAddRepair');
   const createStationMessage   = document.getElementById('createStationMessage');
-
-  // For repair info
-  const repairInfoContainer = document.getElementById('modalRepairInfoContainer');
-  const inputRepairRanking  = document.getElementById('inputRepairRanking');
-  const inputRepairCost     = document.getElementById('inputRepairCost');
-  const inputFrequency      = document.getElementById('inputFrequency');
-  const btnSaveRepairInfo   = document.getElementById('btnSaveRepairInfo');
-  const repairInfoMessage   = document.getElementById('repairInfoMessage');
 
   // In‐memory caches
   let allLocations        = [];
@@ -2673,55 +2664,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     // hide general save so they can't click twice
     btnSaveGeneralInfo.style.display = 'none';
 
-    // reveal Repair Info section
-    modalRepairInfoContainer.style.display = 'block';
-    btnSaveRepairInfo.style.display   = 'inline-block';
-    repairInfoMessage.textContent      = '';
-  });
-
-  // Save Repair Info → validate and then reveal Sections + Final Save
-  btnSaveRepairInfo.addEventListener('click', () => {
-    // 1) grab & validate repair inputs
-    const rr = inputRepairRanking.value.trim();
-    const rc = inputRepairCost.value.trim();
-    const fq = inputFrequency.value.trim();
-
-    // Repair Ranking must be 1–5 or blank
-    if (rr && !['1','2','3','4','5'].includes(rr)) {
-      showAlert('Repair Ranking must be 1, 2, 3, 4, or 5.');
-      return;
-    }
-
-    // cost must be blank or a valid float
-    if (rc && isNaN(parseFloat(rc))) {
-      showAlert('Repair Cost ($) must be a valid number.');
-      return;
-    }
-
-    // 2) capture this repair
-    repairInfos.push({ ranking: rr, cost: rc, freq: fq });
-
-    // 3) update the on‐screen “Repairs Added” list
-    const listContainer = document.getElementById('modalRepairListContainer');
-    const listEl        = document.getElementById('modalRepairList');
-    listContainer.style.display = 'block';
-    const li = document.createElement('li');
-    li.textContent = `Ranking: ${rr || '--'}, Cost: ${rc || '--'}, Frequency: ${fq || '--'}`;
-    listEl.appendChild(li);
-
-    // 4) clear the inputs so you can enter another one
-    inputRepairRanking.value = '';
-    inputRepairCost.value    = '';
-    inputFrequency.value     = '';
-
-    // 5) ensure the extra‐sections & final‐save buttons are visible
+    // show both “+ Add New Section” & “+ Add New Repair”
     modalExtraSectionsContainer.style.display = 'block';
-    btnAddSectionModal.style.display          = 'inline-block';
-    btnCreateStation.style.display            = 'inline-block';
-    createStationMessage.textContent          = '';
+    btnAddSectionModal.style.display = 'inline-block';
+    btnAddRepairModal .style.display = 'inline-block';
+
+    // reveal the final Save button
+    btnCreateStation.style.display = 'inline-block';
+    createStationMessage.textContent = '';
   });
-
-
 
   // Save a new location if typed, preserving asset type selection
   btnSaveLocation.addEventListener('click', async () => {
@@ -2860,10 +2811,95 @@ document.addEventListener('DOMContentLoaded', async () => {
     return container;
   }
 
+  // ─── Create a “Repair” block just like a section ────────────────────────────
+  function createRepairElement() {
+    const container = document.createElement('div');
+    container.classList.add('section-container');
+    // keep count for labelling
+    const idx = document.querySelectorAll('#modalExtraSectionsContainer .section-container.repair').length + 1;
+    container.classList.add('repair');
+    
+    // header row
+    const header = document.createElement('div');
+    header.classList.add('section-header');
+    header.innerHTML = `
+      <strong>Repair ${idx}</strong>
+      <button class="remove-section-btn">Delete Repair</button>
+    `;
+    header.querySelector('button').addEventListener('click', () => container.remove());
+
+    // fields wrapper
+    const wrapper = document.createElement('div');
+    wrapper.classList.add('fields-wrapper');
+
+    // ─── helper to build a simple label + text-input row ─────────────────
+    function addField(label, placeholder) {
+      const row = document.createElement('div');
+      row.classList.add('field-row');
+      row.style.display    = 'flex';
+      row.style.marginTop  = '8px';
+      row.style.alignItems = 'center';
+
+      row.innerHTML = `
+        <input type="text" value="${label}" disabled style="flex:0 0 140px;" />
+        <input type="text" placeholder="${placeholder}" style="flex:1; margin-left:8px;" />
+      `;
+      wrapper.appendChild(row);
+    }
+
+    {
+      const row = document.createElement('div');
+      row.classList.add('field-row');
+      row.style.display      = 'flex';
+      row.style.marginTop    = '8px';
+      row.style.alignItems   = 'center';
+
+      // fixed label
+      const lbl = document.createElement('input');
+      lbl.type     = 'text';
+      lbl.value    = 'Repair Ranking';
+      lbl.disabled = true;
+      lbl.style.flex = '0 0 140px';
+      row.appendChild(lbl);
+
+      // dropdown select
+      const sel = document.createElement('select');
+      sel.style.flex        = '1';
+      sel.style.marginLeft  = '8px';
+      ['',1,2,3,4,5].forEach(v => {
+        const opt = document.createElement('option');
+        opt.value       = String(v);
+        opt.textContent = v === '' ? '--' : String(v);
+        sel.appendChild(opt);
+      });
+      row.appendChild(sel);
+
+      wrapper.appendChild(row);
+    }
+
+    addField('Repair Cost ($)', 'e.g. 1500');
+    addField('Frequency', '');
+
+    container.append(header, wrapper);
+    return container;
+  }
+
+
   btnAddSectionModal.addEventListener('click', () => {
     const newSectionEl = createSectionElement();
     modalExtraSectionsContainer.insertBefore(newSectionEl, btnAddSectionModal);
   });
+  
+  btnAddRepairModal.addEventListener('click', () => {
+    const newRepairEl = createRepairElement();
+    // insert right after the “Add Section” button
+    modalExtraSectionsContainer.insertBefore(
+      newRepairEl,
+      btnAddSectionModal.nextSibling
+    );
+  });
+
+
 
   // ────────────────────────────────────────────────────────────────────────────
   // “Save Infrastructure” → collect data & call createNewStation; persist section headers
@@ -2889,6 +2925,19 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     }
 
+    // ─── 0a) Now prevent saving if there's a half-filled repair block ───────
+    if (modalRepairInfoContainer.style.display === 'block') {
+      const rr = inputRepairRanking.value.trim();
+      const rc = inputRepairCost.value.trim();
+      const fq = inputFrequency.value.trim();
+      // if any of the three is non-empty, they meant to add a repair but didn’t click “Save Repair Info”
+      if (rr !== '' || rc !== '' || fq !== '') {
+        createStationMessage.textContent = 'Every repair must be filled out';
+        return;
+      }
+    }
+
+
 
     createStationMessage.textContent = '';
     const location  = selectLocation.value.trim();
@@ -2896,7 +2945,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const stationId = inputStationId.value.trim();
     const siteName  = inputSiteName.value.trim();
     const status    = inputStatus.value.trim() || 'UNKNOWN';
-    const repairRanking  = selectRepairRanking.value.trim()  || '';
     const latitude  = parseFloat(inputLatitude.value);
     const longitude = parseFloat(inputLongitude.value);
 
@@ -2936,7 +2984,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const stationObject = {
       location,
       assetType,
-      generalInfo: { stationId, siteName, province: location, latitude, longitude, status, repairRanking },
+      generalInfo: { stationId, siteName, province: location, latitude, longitude, status },
       extraSections: allSections
     };
 
@@ -2980,47 +3028,39 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Reset modal to initial state
   function resetModal() {
-    selectLocation.value = '';
-    inputNewLocation.value = '';
+    // 1) Clear Location & Asset‐Type
+    selectLocation.value         = '';
+    inputNewLocation.value       = '';
     assetTypeContainer.style.display = 'none';
-    selectAssetType.value = '';
-    inputNewAssetType.value = '';
+    selectAssetType.value        = '';
+    inputNewAssetType.value      = '';
+
+    // 2) Hide & clear General Info form
     generalInfoForm.style.display = 'none';
-    inputStationId.value = '';
-    inputSiteName.value = '';
-    inputStatus.value = '';
-    inputLatitude.value = '';
-    inputLongitude.value = '';
+    inputStationId.value         = '';
+    inputSiteName.value          = '';
+    inputStatus.value            = '';
+    inputLatitude.value          = '';
+    inputLongitude.value         = '';
 
-    // drop all previously‐added repairs
-    repairInfos = [];
-    // hide the Repair Info inputs & button
-    modalRepairInfoContainer.style.display = 'none';
-    btnSaveRepairInfo.style.display        = 'none';
-    // clear the inputs
-    inputRepairRanking.value = '';
-    inputRepairCost.value    = '';
-    inputFrequency.value     = '';
-
-    // hide & clear the “Repairs Added” list
-    const listContainer = document.getElementById('modalRepairListContainer');
-    const listEl        = document.getElementById('modalRepairList');
-    listContainer.style.display = 'none';
-    listEl.innerHTML            = '';
-
+    // 3) Remove any dynamically‐added extra sections
     modalExtraSectionsContainer.style.display = 'none';
-    const existingSecEls = modalExtraSectionsContainer.querySelectorAll('.section-container');
-    existingSecEls.forEach(el => el.remove());
-    btnCreateStation.style.display = 'none';
+    modalExtraSectionsContainer
+      .querySelectorAll('.section-container')
+      .forEach(el => el.remove());
+    btnAddSectionModal.style.display = 'none';
+
+    // 4) Hide Create button & message
+    btnCreateStation.style.display   = 'none';
     createStationMessage.textContent = '';
 
-    // bulk-import reset
-    importFilePath           = null;
-    chosenExcelName.textContent = '';
-    sheetSelectContainer.style.display     = 'none';
-    sheetCheckboxContainer.innerHTML       = '';
-    btnImportSheets.disabled               = true;
-    importSummary.textContent= '';
+    // 5) Reset bulk-import UI
+    importFilePath                = null;
+    chosenExcelName.textContent   = '';
+    sheetSelectContainer.style.display    = 'none';
+    sheetCheckboxContainer.innerHTML      = '';
+    btnImportSheets.disabled              = true;
+    importSummary.textContent             = '';
   }
 
   // Initial load of lookups & station IDs

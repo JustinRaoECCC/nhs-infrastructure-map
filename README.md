@@ -138,9 +138,12 @@ nhs-infrastructure-map/
 ## Current Bugs / TODO List
 
 
++ So it seems like when smt fails in Add Infrastructure, and then i click off the screen, it causes a bug where the save general info button is gone
++ also the red text doesnt leave omg
+
+
 3. Active becomes inactive
 4. Specify what the user should be entering for frequency (dropdown for the unit)
-5. Repairs are not necessary (same Add Infrastructure format as Section- Field)
 6. Creating a station auto creates a station older in the file system of format: AKIE_RIVER_NEAR_THE_760_M_CONTOUR_07EA007
 7. Be able to delete a station (admin contol)
 8. Be able to create a folder as an inspection (based off of the name convention) and be able to upload documents/photos to it
@@ -156,7 +159,6 @@ ADMIN CONTROl
 
 
 * Impliment the calculation for determining what should be the order of repairs (Sort by: Repair Priority) -->  Out of 100, it's somthing like x times 0.3 + y times 0.5 + z times 0.2
-
 
 
 
