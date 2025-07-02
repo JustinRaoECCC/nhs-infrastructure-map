@@ -1309,55 +1309,27 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // “Delete Section” button
     const removeSecBtn = document.createElement('button');
-    removeSecBtn.textContent = 'Delete Section';
+    // If this is a repair block, label it appropriately
+    removeSecBtn.textContent = sectionName.startsWith('Repair')
+      ? 'Delete Repair'
+      : 'Delete Section';
 
-    removeSecBtn.addEventListener('click', async () => {
-      const sectionName = sectionDiv.dataset.sectionName;
-      const prefix = sectionDiv.dataset.sectionKeyPrefix; // e.g. "Site Info - "
-      console.log(`[DEBUG] Deleting section "${sectionName}" with prefix "${prefix}"`);
-
-      const rows = sectionDiv.querySelectorAll('.quick-field-row');
-      if (rows.length > 0 && !confirm(`This section is not empty. Delete anyway?`)) {
-        console.log('[DEBUG] User cancelled delete');
-        return;
-      }
-
-      // 1) Remove from currentEditingStation
+    removeSecBtn.addEventListener('click', () => {
+      // Remove from the in-memory station
+      const prefix = sectionDiv.dataset.sectionKeyPrefix;
       Object.keys(currentEditingStation).forEach(k => {
-        if (k.startsWith(prefix)) {
-          delete currentEditingStation[k];
-        }
+        if (k.startsWith(prefix)) delete currentEditingStation[k];
       });
-      console.log('[DEBUG] currentEditingStation after delete:', Object.keys(currentEditingStation));
 
-      // 2) Remove the UI block
+      // Drop the UI block
       sectionDiv.remove();
 
-      // 3) Persist to Excel
-      console.log('[DEBUG] Calling saveStationData...');
-      const result = await window.electronAPI.saveStationData(currentEditingStation);
-      console.log('[DEBUG] saveStationData result:', result);
-      if (!result.success) {
-        showAlert(`Save failed: ${result.message}`);
-        return;
-      }
-
-      // 4) Reload allStationData
-      console.log('[DEBUG] Reloading allStationData...');
-      await loadDataAndInitialize();
-      console.log('[DEBUG] allStationData loaded:', allStationData.map(s => ({
-        id: s.stationId,
-        keys: Object.keys(s).filter(k => k.startsWith(prefix))
-      })));
-
-      // 5) Re-display quick-view for this station
-      const fresh = allStationData.find(s => String(s.stationId) === String(currentEditingStation.stationId));
-      if (fresh) {
-        console.log('[DEBUG] Redisplaying quick view on station', fresh.stationId);
-        displayStationDetailsQuickView(fresh);
-      } else {
-        console.warn('[DEBUG] Could not re-find station after reload');
-      }
+      showSuccess(
+        sectionName.startsWith('Repair')
+          ? 'Repair removed locally. Click “Save Repairs” to persist.'
+          : 'Section removed locally. Click “Save Changes” to persist.',
+        3000
+      );
     });
     headerDiv.appendChild(removeSecBtn);
 
