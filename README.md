@@ -137,7 +137,7 @@ nhs-infrastructure-map/
 
 ## Current Bugs / TODO List
 
-
+1. Fix the deleting error
 2. Only show Repair Information if there is a repair needed
 3. Active becomes inactive
 4. Specify what the user should be intering for frequency (dropdown for the unit)
