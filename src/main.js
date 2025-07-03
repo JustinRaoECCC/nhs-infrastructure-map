@@ -414,6 +414,19 @@ async function createNewStationInternal(stationObject) {
 
     // 9) Save the updated workbook
     await wb2.xlsx.writeFile(dataPath);
+
+    // ─── 10) Create the station’s folder on disk ─────────────────────────────
+    // e.g. AKIE_RIVER_NEAR_THE_760_M_CONTOUR_07EA007
+    const folderName = `${stationObject.generalInfo.siteName
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, '_')}_${stationObject.generalInfo.stationId}`;
+    const stationFolderPath = path.join(BASE_STATIONS_PATH, folderName);
+    try {
+      await fsPromises.mkdir(stationFolderPath, { recursive: true });
+    } catch (err) {
+      console.warn(`Could not create station folder "${stationFolderPath}":`, err);
+    }
+
     return { success: true, message: 'New station created successfully.' };
 
   } catch (err) {
