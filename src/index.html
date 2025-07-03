@@ -25,7 +25,7 @@
         content="
           script-src 'self' https://unpkg.com;
           style-src 'self' https://unpkg.com 'unsafe-inline';
-          img-src 'self' data: https://*.tile.openstreetmap.org https://unpkg.com;
+          img-src 'self' data: https:;
         ">
 </head>
 <body>
@@ -58,6 +58,9 @@
         <!-- Download current view as PDF -->
         <button id="btnDownload">Download</button>
 
+        <!-- Toggle Map -->
+        <button id="btnToggleBasemap" title="Cycle basemap">🗺️</button>
+
         <!-- List-view-specific controls (hidden initially) -->
         <div id="listViewControls" style="display: none; align-items: center; margin-left: 10px;">
           <label for="sortSelect" style="margin-right:4px;">Sort by:</label>
@@ -79,6 +82,9 @@
             <option value="location">Location</option>
           </select>
         </div>
+
+        
+
       </div>
     </div>
 

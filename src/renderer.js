@@ -24,11 +24,65 @@ document.addEventListener('DOMContentLoaded', async () => {
     maxBoundsViscosity: 1.0
   }).setView([54.5, -119], 5);
 
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    // don’t wrap the tiles horizontally
-    noWrap: true
-  }).addTo(map);
+  // 1) Leaflet Map Initialization (after map = L.map(...))
+  const tileProviders = [
+    {
+      name: 'OSM',
+      url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      options: {
+        subdomains: ['a','b','c'],
+        attribution:
+          '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        noWrap: true
+      }
+    },
+    {
+      name: 'Esri World Imagery',
+      url:
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/' +
+        'MapServer/tile/{z}/{y}/{x}',
+      options: {
+        attribution:
+          'Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community',
+        noWrap: true,
+        // never load tiles north of 90° or south of –90°:
+        bounds: [[-90, -180], [90, 180]],
+        // optional: if you know the service only goes 1–19, you can
+        // tell Leaflet to auto-scale rather than request bogus z=0 tiles:
+        minNativeZoom: 1,
+        maxNativeZoom: 19
+      }
+    }
+  ];
+
+  // start with the first provider…
+  let providerIndex = 0;
+  let baseLayer = L.tileLayer(
+    tileProviders[0].url,
+    tileProviders[0].options
+  ).addTo(map);
+
+  function cycleBaseLayer() {
+    map.removeLayer(baseLayer);
+    providerIndex = (providerIndex + 1) % tileProviders.length;
+    const tp = tileProviders[providerIndex];
+
+    // Build a dummy URL for logging
+    const testData = {
+      s: tp.options.subdomains?.[0] || '',
+      z: 0, x: 0, y: 0,
+      r: ''  // no retina suffix
+    };
+    console.log('→ loading tiles from:', L.Util.template(tp.url, testData));
+
+    baseLayer = L.tileLayer(tp.url, tp.options).addTo(map);
+    console.log('Switched to basemap:', tp.name);
+  }
+
+  // 2) Long-press “nuke” button to cycle basemap
+  const toggleBtn = document.getElementById('btnToggleBasemap');
+  toggleBtn.addEventListener('click', cycleBaseLayer);
+
 
   // ────────────────────────────────────────────────────────────────────────────
   // 2) DOM Element References

@@ -30,6 +30,7 @@ body, html {
   border-bottom: 1px solid #ccc;
   text-align: center;
   flex-shrink: 0;
+  position: relative;
 }
 /* Headline inside title bar: remove default margins, add bottom margin */
 .title-bar h1 {
@@ -578,4 +579,22 @@ body, html {
   box-shadow: 0 4px 12px rgba(0,0,0,0.2);
   z-index: 10000;
   white-space: nowrap;
+}
+
+
+/* Position the cycle button at the top right */
+#btnToggleBasemap {
+  position: absolute;
+  right: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 6px 12px;
+  font-size: 1.1em;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  cursor: pointer;
+}
+#btnToggleBasemap:hover {
+  background: #f0f0f0;
 }
