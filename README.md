@@ -140,7 +140,6 @@ nhs-infrastructure-map/
 
 3. Active becomes inactive
 
-7. Be able to delete a station (admin contol)
 8. Be able to create a folder as an inspection (based off of the name convention) and be able to upload documents/photos to it
   - First 6 photos displayed only
   - Follow photo Khodi sent as a template
