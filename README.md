@@ -140,7 +140,6 @@ nhs-infrastructure-map/
 
 3. Active becomes inactive
 
-4. Specify what the user should be entering for frequency (dropdown for the unit)
 6. Creating a station auto creates a station older in the file system of format: AKIE_RIVER_NEAR_THE_760_M_CONTOUR_07EA007
 7. Be able to delete a station (admin contol)
 8. Be able to create a folder as an inspection (based off of the name convention) and be able to upload documents/photos to it

@@ -1941,6 +1941,34 @@ document.addEventListener('DOMContentLoaded', async () => {
       // remove every little "×" delete‐field button
       block.querySelectorAll('.quick-field-row button').forEach(btn => btn.remove());
 
+      // swap the Frequency text <input> for number + unit <select>
+      block.querySelectorAll('.quick-field-row').forEach(row => {
+        const label = row.children[0].value.trim();
+        if (label === 'Frequency') {
+          const oldInput = row.children[1];
+          // parse existing "100 days" into [value, unit]
+          const [val, unit] = String(oldInput.value || '').split(' ');
+          // number input
+          const num = document.createElement('input');
+          num.type       = 'number';
+          num.value      = val || '';
+          num.style.flex = oldInput.style.flex;
+          num.style.minWidth = oldInput.style.minWidth;
+          // unit dropdown
+          const sel = document.createElement('select');
+          sel.style.marginLeft = oldInput.style.marginLeft;
+          ['days','weeks','months','years'].forEach(u => {
+            const opt = document.createElement('option');
+            opt.value = u; opt.textContent = u;
+            if (u === unit) opt.selected = true;
+            sel.appendChild(opt);
+          });
+          // replace and remove the old text input
+          row.replaceChild(num, oldInput);
+          row.appendChild(sel);
+        }
+      });
+
       // swap the Repair Ranking input for a dropdown
       block.querySelectorAll('.quick-field-row').forEach(row => {
         const label = row.children[0].value.trim();
@@ -1992,6 +2020,36 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
           });
 
+        block.querySelectorAll('.quick-field-row').forEach(row => {
+          const label = row.children[0].value.trim();
+          if (label === 'Frequency') {
+            const oldInput = row.children[1];
+            // split existing "100 days" into [number, unit]
+            const [numVal, unitVal] = String(oldInput.value || '').split(' ');
+            // create <input type="number">
+            const num = document.createElement('input');
+            num.type       = 'number';
+            num.value      = numVal || '';
+            num.style.flex = oldInput.style.flex;
+            num.style.minWidth = oldInput.style.minWidth;
+
+            // create <select> for units
+            const sel = document.createElement('select');
+            sel.style.marginLeft = oldInput.style.marginLeft;
+            ['days','weeks','months','years'].forEach(u => {
+              const opt = document.createElement('option');
+              opt.value = u; opt.textContent = u;
+              if (u === unitVal) opt.selected = true;
+              sel.appendChild(opt);
+            });
+
+            // swap in number+unit
+            row.replaceChild(num, oldInput);
+            row.appendChild(sel);
+          }
+        });
+
+
       // replace the Ranking input with a <select> again
       block.querySelectorAll('.quick-field-row').forEach(row => {
         const label = row.children[0].value.trim();
@@ -2023,6 +2081,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const saveBtn = document.createElement('button');
     saveBtn.textContent = 'Save Repairs';
     saveBtn.style.marginTop = '10px';
+
     saveBtn.addEventListener('click', async () => {
       // wipe out the old .xlsx first
       await window.electronAPI.deleteStationRepairs(stationId);
@@ -2030,30 +2089,35 @@ document.addEventListener('DOMContentLoaded', async () => {
       // then append each repair fresh
       const blocks = dynContainer.querySelectorAll('.quick-section');
       for (let i = 0; i < blocks.length; i++) {
-        const rows = blocks[i].querySelectorAll('.quick-field-row');
-        // build & validate one repair entry
-        const rep = { ranking: 0, cost: 0, freq: '' };
-        for (const row of rows) {
-          const key = row.children[0].value.trim();
-          const val = row.children[1].value.trim();
+          const rows = blocks[i].querySelectorAll('.quick-field-row');
+          const rep = { ranking: 0, cost: 0, freq: '' };
+          for (const row of rows) {
+            const key = row.children[0].value.trim();
+            const val = row.children[1].value.trim();
 
-          if (key === 'Repair Ranking') {
-            rep.ranking = parseInt(val, 10) || 0;
-          }
-          else if (key === 'Repair Cost ($)' || key === 'Repair Cost') {
-            const num = parseFloat(val);
-            if (isNaN(num)) {
-              showAlert('Repair Cost must be a valid number.');
-              return;  // abort save
+            if (key === 'Repair Ranking') {
+              rep.ranking = parseInt(val, 10) || 0;
             }
-            rep.cost = num;
+            else if (key === 'Repair Cost ($)' || key === 'Repair Cost') {
+              const num = parseFloat(val);
+              if (isNaN(num)) {
+                showAlert('Repair Cost must be a valid number.');
+                return;  // abort save
+              }
+              rep.cost = num;
+            }
+            else if (key === 'Frequency') {
+              // ← replace your old single-line here with:
+              const numInput   = row.children[1];
+              const unitSelect = row.children[2];
+              const n = numInput.value.trim();
+              rep.freq = (n && unitSelect.value)
+                ? `${n} ${unitSelect.value}`
+                : '';
+            }
           }
-          else if (key === 'Frequency') {
-            rep.freq = val;
-          }
+          await window.electronAPI.createNewRepair(stationId, rep);
         }
-        await window.electronAPI.createNewRepair(stationId, rep);
-      }
 
       // re-render so we never see duplicates
       await renderRepairsSection(container, stationId);
@@ -2943,7 +3007,44 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     addField('Repair Cost ($)', 'e.g. 1500');
-    addField('Frequency', '');
+
+    // build Frequency row with a <input type="number"> + <select>
+    const freqRow = document.createElement('div');
+    freqRow.classList.add('field-row');
+    freqRow.style.display    = 'flex';
+    freqRow.style.marginTop  = '8px';
+    freqRow.style.alignItems = 'center';
+
+    // label
+    const lbl = document.createElement('input');
+    lbl.type     = 'text';
+    lbl.value    = 'Frequency';
+    lbl.disabled = true;
+    lbl.style.flex = '0 0 140px';
+    freqRow.appendChild(lbl);
+
+    // numeric input
+    const freqInput = document.createElement('input');
+    freqInput.type       = 'number';
+    freqInput.classList.add('freq-input');
+    freqInput.placeholder = 'e.g. 100';
+    freqInput.style.flex = '1';
+    freqInput.style.marginLeft = '8px';
+    freqRow.appendChild(freqInput);
+
+    // unit dropdown
+    const freqUnit = document.createElement('select');
+    freqUnit.classList.add('freq-unit');
+    ['days','weeks','months','years'].forEach(u => {
+      const opt = document.createElement('option');
+      opt.value = u;
+      opt.textContent = u;
+      freqUnit.appendChild(opt);
+    });
+    freqUnit.style.marginLeft = '8px';
+    freqRow.appendChild(freqUnit);
+
+    wrapper.appendChild(freqRow);
 
     container.append(header, wrapper);
     return container;
@@ -2957,11 +3058,24 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   btnAddRepairModal.addEventListener('click', () => {
     const newRepairEl = createRepairElement();
-    // insert right after the “Add Section” button
     modalExtraSectionsContainer.insertBefore(
       newRepairEl,
       btnAddSectionModal.nextSibling
     );
+
+    // collect & stash into repairInfos[]
+    const selRanking  = newRepairEl.querySelector('select');
+    const costInput   = newRepairEl.querySelector('input[type="text"][placeholder*="e.g."]');
+    const freqInput   = newRepairEl.querySelector('input.freq-input');
+    const freqUnit    = newRepairEl.querySelector('select.freq-unit');
+
+    repairInfos.push({
+      ranking: selRanking.value,
+      cost:    parseFloat(costInput.value) || 0,
+      freq:    freqInput.value && freqUnit.value
+                ? `${freqInput.value} ${freqUnit.value}`
+                : ''
+    });
   });
 
 
@@ -3020,7 +3134,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Gather extra sections specified by user in modal
     const allSections = {};
-    const sectionContainers = modalExtraSectionsContainer.querySelectorAll('.section-container');
+
+    const sectionContainers = modalExtraSectionsContainer
+      .querySelectorAll('.section-container:not(.repair)');
+
     for (const secEl of sectionContainers) {
       const secTitle = secEl.querySelector('.section-title-input').value.trim();
 
@@ -3062,15 +3179,23 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
 
       // 2) Seed *all* collected repair records
-      for (const rep of repairInfos) {
-        const ranking = rep.ranking ? parseInt(rep.ranking, 10) : 0;
-        const cost    = rep.cost    ? parseFloat(rep.cost)    : 0;
-        const freq    = rep.freq    || '';
-        await window.electronAPI.createNewRepair(stationId, {
-          ranking,
-          cost,
-          freq
-        });
+      const repairBlocks = modalExtraSectionsContainer.querySelectorAll('.section-container.repair');
+      for (const block of repairBlocks) {
+        const rows = block.querySelectorAll('.field-row');
+        // row 0: Repair Ranking <select>
+        const ranking = parseInt(rows[0].querySelector('select').value, 10) || 0;
+        // row 1: Repair Cost <input>
+        const costInput = rows[1].children[1];
+        const cost = parseFloat(costInput.value) || 0;
+        // row 2: Frequency <input type="number"> + <select>
+        const freqRow = rows[2];
+        const numInput = freqRow.querySelector('input[type="number"]');
+        const unitSelect = freqRow.querySelector('select');
+        const freq = (numInput.value && unitSelect.value)
+          ? `${numInput.value} ${unitSelect.value}`
+          : '';
+
+        await window.electronAPI.createNewRepair(stationId, { ranking, cost, freq });
       }
 
       // 3) Show success, close modal, refresh everything
