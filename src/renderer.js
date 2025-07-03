@@ -2925,18 +2925,18 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     }
 
-    // ─── 0a) Now prevent saving if there's a half-filled repair block ───────
-    if (modalRepairInfoContainer.style.display === 'block') {
-      const rr = inputRepairRanking.value.trim();
-      const rc = inputRepairCost.value.trim();
-      const fq = inputFrequency.value.trim();
-      // if any of the three is non-empty, they meant to add a repair but didn’t click “Save Repair Info”
-      if (rr !== '' || rc !== '' || fq !== '') {
+    // ─── 0a) Prevent saving if there's a half-filled repair block ─────────────
+    const repairBlocks = modalExtraSectionsContainer.querySelectorAll('.section-container.repair');
+    for (const block of repairBlocks) {
+      // each repair block has exactly 3 inputs: ranking (select), cost, frequency
+      const inputs = Array.from(block.querySelectorAll('select, input'));
+      const filledStates = inputs.map(i => i.value.trim() !== '');
+      // if some but not all are filled → error
+      if (filledStates.some(Boolean) && !filledStates.every(Boolean)) {
         createStationMessage.textContent = 'Every repair must be filled out';
         return;
       }
     }
-
 
 
     createStationMessage.textContent = '';
@@ -3037,6 +3037,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 2) Hide & clear General Info form
     generalInfoForm.style.display = 'none';
+    btnSaveGeneralInfo.style.display = 'inline-block';
     inputStationId.value         = '';
     inputSiteName.value          = '';
     inputStatus.value            = '';
@@ -3045,6 +3046,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 3) Remove any dynamically‐added extra sections
     modalExtraSectionsContainer.style.display = 'none';
+    btnAddRepairModal.style.display = 'none';
     modalExtraSectionsContainer
       .querySelectorAll('.section-container')
       .forEach(el => el.remove());
