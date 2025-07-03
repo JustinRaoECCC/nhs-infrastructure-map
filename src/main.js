@@ -15,6 +15,7 @@ const { app, BrowserWindow, ipcMain, dialog, shell, clipboard, nativeImage } = r
 const { exec } = require('child_process');
 const fs = require('fs');
 const fsPromises = require('fs').promises;
+const fsP   = fs.promises;
 const fsSync = require('fs');
 const path = require('path');
 const ExcelJS = require('exceljs');
@@ -434,6 +435,74 @@ async function createNewStationInternal(stationObject) {
     return { success: false, message: err.message };
   }
 }
+
+ipcMain.handle('delete-station', async (_evt, stationId) => {
+  try {
+    // 1) Load list of all asset types
+    const lookupWb = await loadLookupWorkbook();
+    const atSh     = lookupWb.getWorksheet('AssetTypes');
+    const assetTypes = [];
+    atSh.eachRow((row, rn) => {
+      if (rn >= 2) {
+        const v = row.getCell(1).text?.trim();
+        if (v) assetTypes.push(v);
+      }
+    });
+
+    // 2) For each asset-type workbook, remove any row with Station ID === stationId
+    for (const at of assetTypes) {
+      const file = path.join(DATA_DIR, `${at}.xlsx`);
+      if (!fs.existsSync(file)) continue;
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.readFile(file);
+      let dirty = false;
+
+      for (const ws of wb.worksheets) {
+        // find column index of “Station ID”
+        let idCol = -1;
+        ws.getRow(2).eachCell((cell, idx) => {
+          if (String(cell.value).trim() === 'Station ID') idCol = idx;
+        });
+        if (idCol < 1) continue;
+
+        // scan rows 3+
+        for (let r = 3; r <= ws.rowCount; r++) {
+          const val = ws.getRow(r).getCell(idCol).value;
+          if (String(val).trim() === stationId) {
+            ws.spliceRows(r, 1);
+            dirty = true;
+            break;  // if you only expect one per sheet
+          }
+        }
+      }
+
+      if (dirty) {
+        await wb.xlsx.writeFile(file);
+      }
+    }
+
+    // 3) Delete repairs file if it exists
+    const repFile = path.join(REPAIRS_DIR, `${stationId}_repairs.xlsx`);
+    if (fs.existsSync(repFile)) {
+      await fsP.unlink(repFile);
+    }
+
+    // 4) Delete station folder (match folder ending in _<ID>)
+    const entries = await fsP.readdir(BASE_STATIONS_PATH, { withFileTypes: true });
+    for (const e of entries) {
+      if (e.isDirectory() && e.name.toUpperCase().endsWith(`_${stationId.toUpperCase()}`)) {
+        await fsP.rm(path.join(BASE_STATIONS_PATH, e.name), { recursive: true, force: true });
+        break;
+      }
+    }
+
+    return { success: true };
+  } catch (err) {
+    console.error('delete-station error:', err);
+    return { success: false, message: err.message };
+  }
+});
+
 
 
 

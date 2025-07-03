@@ -2320,6 +2320,33 @@ document.addEventListener('DOMContentLoaded', async () => {
     msgDiv.id = 'saveMessage';
     msgDiv.style.marginTop = '8px';
     section.appendChild(msgDiv);
+
+    // ─── DELETE BUTTON ───────────────────────────────────────────────────────
+    const deleteBtn = document.createElement('button');
+    deleteBtn.textContent = 'Delete Station';
+    deleteBtn.style.marginTop = '12px';
+    deleteBtn.onclick = async () => {
+      // prompt for admin password
+      const pwd = await showPasswordDialog();
+      if (pwd === '1234') {
+        // final confirmation
+        if (!confirm(`Really delete station ${stationData.stationName} (${stationData.stationId}) and all its data?`)) {
+          return;
+        }
+        // call backend
+        const res = await window.electronAPI.deleteStation(stationData.stationId);
+        if (res.success) {
+          showSuccess('Station deleted.', 2000);
+          closeStationDetailPage();
+          await loadDataAndInitialize();
+        } else {
+          showAlert(`Error deleting station: ${res.message}`);
+        }
+      } else if (pwd !== null) {
+        showAlert('Incorrect password.');
+      }
+    };
+    section.appendChild(deleteBtn);
   }
 
 
