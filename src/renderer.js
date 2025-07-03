@@ -615,7 +615,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // 2) render each category group
-    Object.keys(map).sort().forEach(cat => {
+    const specialRE = /(non|active)/i;
+    const cats = Object.keys(map);
+    cats.sort((a, b) => {
+      const aSpecial = specialRE.test(a);
+      const bSpecial = specialRE.test(b);
+      if (aSpecial !== bSpecial) {
+        // non/active categories are “greater” → move them to the bottom
+        return aSpecial ? 1 : -1;
+      }
+      // otherwise sort alphabetically
+      return a.localeCompare(b);
+    });
+
+    cats.forEach(cat => {
       const groupDiv = document.createElement('div');
       groupDiv.className = 'filter-group';
 
@@ -628,7 +641,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       mainChk.id = `toggle-all-${cat.replace(/\s+/g,'-')}`;
       mainChk.onchange = () => {
         groupDiv
-          .querySelectorAll('input[type="checkbox"]:not(#'+mainChk.id+')')
+          .querySelectorAll(`input[type="checkbox"]:not(#${mainChk.id})`)
           .forEach(cb => cb.checked = mainChk.checked);
         updateActiveViewDisplay();
       };
@@ -640,6 +653,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const subCont = document.createElement('div');
       subCont.style.paddingLeft = '20px';
 
+      // provinces still alphabetical
       Array.from(map[cat]).sort().forEach(prov => {
         const comboKey = `${cat}|${prov}`;
 
@@ -652,8 +666,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         chk.style.accentColor = getComboColor(cat, prov);
         chk.onchange = () => {
           const subs = Array.from(subCont.querySelectorAll('input[type="checkbox"]'));
-          const all  = subs.every(c=>c.checked), none = subs.every(c=>!c.checked);
-          mainChk.checked     = all;
+          const all  = subs.every(c => c.checked),
+                none = subs.every(c => !c.checked);
+          mainChk.checked       = all;
           mainChk.indeterminate = !all && !none;
           updateActiveViewDisplay();
         };
@@ -663,22 +678,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         // 2) Colour-picker
         const picker = document.createElement('input');
         picker.type  = 'color';
-        // initialize to saved or default
         picker.value = comboColorMap[comboKey] || getComboColor(cat, prov);
         picker.title = `Colour for ${cat} / ${prov}`;
         picker.style.marginLeft = '6px';
         picker.addEventListener('change', async e => {
           const newColor = e.target.value;
-          // 1) store it
           comboColorMap[comboKey] = newColor;
-          // 2) immediately update the checkbox style
-          chk.style.accentColor = newColor;
-          // 3) persist
+          chk.style.accentColor  = newColor;
           await window.electronAPI.saveColor(cat, prov, newColor);
-          // 4) redraw map/list
           updateActiveViewDisplay();
         });
         lbl.appendChild(picker);
+
         subCont.appendChild(lbl);
       });
 
