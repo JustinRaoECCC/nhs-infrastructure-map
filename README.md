@@ -145,6 +145,7 @@ nhs-infrastructure-map/
   - Follow photo Khodi sent as a template
   - Next inspection date is coming from inspection frequency
 9. Fix up documents tab
+10. "Enter" button works
 
 ADMIN CONTROl
 - Log in as Admin OR Log in as Guest

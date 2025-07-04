@@ -2512,11 +2512,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             renderOverviewSection(currentStationDetailData.overview);
             break;
           case 'inspectionHistory':
-            renderFileListSection(
-              detailSections.inspectionHistory,
-              currentStationDetailData.inspectionHistory,
-              "No inspection history."
-            );
+            await renderInspectionHistorySection();
             break;
           case 'highPriorityRepairs':
             // call your new editable repairs UI
@@ -3792,7 +3788,126 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.querySelector('.detail-nav-btn[data-section="documents"]').click();
       }
     };
-  }  
+  }
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // Renders the Inspection History tab as a timeline with up to 5 thumbnails,
+  // sorted with the newest inspection first, and a “Next Inspection Due” header.
+  // ────────────────────────────────────────────────────────────────────────────
+  async function renderInspectionHistorySection() {
+    const container = detailSections.inspectionHistory;
+    container.innerHTML = '';
+
+    // 1) get only directories
+    let entries = currentStationDetailData.inspectionHistory
+      .filter(e => e.isDirectory);
+
+    if (entries.length === 0) {
+      container.innerHTML = `<p>No inspection history found.</p>`;
+      return;
+    }
+
+    // 2) sort descending by date from folder name (assumes YYYY-MM-DD at start)
+    entries.sort((a, b) => {
+      const da = new Date(a.name.slice(0,10));
+      const db = new Date(b.name.slice(0,10));
+      return db - da;
+    });
+
+    // 3) compute Next Inspection Due
+    let nextDateStr = 'TBD';
+    const freqText = currentStationDetailData.overview['Frequency'] || '';
+    if (entries.length && freqText) {
+      // parse last inspection date (the first in our sorted list)
+      const lastDate = new Date(entries[0].name.slice(0,10));
+      const [nRaw, unit] = freqText.split(' ');
+      const n = parseInt(nRaw, 10) || 0;
+      if (n > 0) {
+        switch (unit) {
+          case 'days':   lastDate.setDate(lastDate.getDate() + n); break;
+          case 'weeks':  lastDate.setDate(lastDate.getDate() + n * 7); break;
+          case 'months': lastDate.setMonth(lastDate.getMonth() + n); break;
+          case 'years':  lastDate.setFullYear(lastDate.getFullYear() + n); break;
+        }
+        nextDateStr = lastDate.toISOString().slice(0,10);
+      }
+    }
+
+    // 4) render “Next Inspection Due” header
+    const dueDiv = document.createElement('div');
+    dueDiv.classList.add('next-inspection');
+    dueDiv.innerHTML = `
+      <h4>
+        <span class="next-date">${nextDateStr}</span> –
+        <em>Next Inspection Due</em>
+      </h4>`;
+    container.appendChild(dueDiv);
+
+    // 5) render each inspection entry
+    for (const entry of entries) {
+      const [datePart, rest] = entry.name.split(' - ', 2);
+      const [actionPart, byPart] = (rest || '').split(' by ', 2);
+
+      const entryDiv = document.createElement('div');
+      entryDiv.classList.add('inspection-entry');
+
+      // header
+      const header = document.createElement('h4');
+      header.textContent = `${datePart} - ${actionPart} by ${byPart}`;
+      entryDiv.appendChild(header);
+
+      // summary (first line of summary.txt, if present)
+      const summary = document.createElement('p');
+      summary.classList.add('inspection-summary');
+      try {
+        const txt = await window.electronAPI.openFileText(`${entry.path}/summary.txt`);
+        summary.textContent = txt.split(/\r?\n/)[0];
+      } catch {
+        summary.textContent = '';
+      }
+      entryDiv.appendChild(summary);
+
+      // thumbnails row
+      const thumbRow = document.createElement('div');
+      thumbRow.classList.add('inspection-thumbs');
+      const files = await window.electronAPI.listDirectoryContents(entry.path);
+      const images = files.filter(f => !f.isDirectory).slice(0, 5);
+
+      images.forEach(imgItem => {
+        const img = document.createElement('img');
+        img.src     = `file://${imgItem.path}`;
+        img.title   = imgItem.name;
+        img.onclick = () => {
+          currentPhotoFolder = entry.path;
+          document.querySelector('.detail-nav-btn[data-section="photos"]').click();
+        };
+        thumbRow.appendChild(img);
+      });
+
+      const totalImgs = files.filter(f => !f.isDirectory).length;
+      if (totalImgs > 5) {
+        const more = document.createElement('button');
+        more.classList.add('inspection-more');
+        more.textContent = `+ ${totalImgs - 5} more`;
+        more.onclick = () => {
+          currentPhotoFolder = entry.path;
+          document.querySelector('.detail-nav-btn[data-section="photos"]').click();
+        };
+        thumbRow.appendChild(more);
+      }
+
+      entryDiv.appendChild(thumbRow);
+
+      // placeholder for repairs
+      const repairs = document.createElement('div');
+      repairs.classList.add('inspection-repairs');
+      entryDiv.appendChild(repairs);
+
+      container.appendChild(entryDiv);
+    }
+  }
+
+
 }); // end DOMContentLoaded
 
 
