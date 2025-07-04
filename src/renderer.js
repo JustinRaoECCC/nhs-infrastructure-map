@@ -330,24 +330,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     container.appendChild(grid);
   }
 
-
-  // Full‐screen overlay for a single image
-  function showImageOverlay(imgItem) {
-    const overlay = document.createElement('div');
-    overlay.style = `
-      position:fixed; top:0; left:0; right:0; bottom:0;
-      background:rgba(0,0,0,0.8);
-      display:flex; align-items:center; justify-content:center;
-      z-index:10000;
-    `;
-    const img = document.createElement('img');
-    img.src = `file://${imgItem.path}`;
-    img.style.maxWidth = '90%';
-    img.style.maxHeight = '90%';
-    overlay.appendChild(img);
-    overlay.onclick = () => overlay.remove();
-    document.body.appendChild(overlay);
-  }
  // ────────────────────────────────────────────────────────────────────────────────────────────────────────
 
   repairsSortSelect.addEventListener('change', e => {
@@ -3292,7 +3274,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   btnNuke.addEventListener('click', () => {
     destroyClicks++;
     if (destroyClicks === 1) {
-      // start/reset 3s window
+      // start/reset 0.5s window
       destroyTimer = setTimeout(() => destroyClicks = 0, 500);
     }
     if (destroyClicks >= 3) {
@@ -3798,7 +3780,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const container = detailSections.inspectionHistory;
     container.innerHTML = '';
 
-    // 1) get only directories
+    // 1) collect only directories
     let entries = currentStationDetailData.inspectionHistory
       .filter(e => e.isDirectory);
 
@@ -3807,33 +3789,52 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
-    // 2) sort descending by date from folder name (assumes YYYY-MM-DD at start)
+    // 2) sort descending by date prefix (YYYY or YYYY-MM-DD)
     entries.sort((a, b) => {
-      const da = new Date(a.name.slice(0,10));
-      const db = new Date(b.name.slice(0,10));
-      return db - da;
+      const toMillis = name => {
+        // try full YYYY-MM-DD first
+        let m = name.match(/^(\d{4}-\d{2}-\d{2})/);
+        let raw = m
+          ? m[1]
+          : (name.match(/^(\d{4})/) || [])[1] || '';
+        const d = new Date(raw);
+        return isNaN(d) ? 0 : d.getTime();
+      };
+      return toMillis(b.name) - toMillis(a.name);
     });
 
-    // 3) compute Next Inspection Due
+    // 3) compute “Next Inspection Due”
     let nextDateStr = 'TBD';
     const freqText = currentStationDetailData.overview['Frequency'] || '';
-    if (entries.length && freqText) {
-      // parse last inspection date (the first in our sorted list)
-      const lastDate = new Date(entries[0].name.slice(0,10));
-      const [nRaw, unit] = freqText.split(' ');
-      const n = parseInt(nRaw, 10) || 0;
-      if (n > 0) {
-        switch (unit) {
-          case 'days':   lastDate.setDate(lastDate.getDate() + n); break;
-          case 'weeks':  lastDate.setDate(lastDate.getDate() + n * 7); break;
-          case 'months': lastDate.setMonth(lastDate.getMonth() + n); break;
-          case 'years':  lastDate.setFullYear(lastDate.getFullYear() + n); break;
+    if (entries.length > 0 && freqText) {
+      // take the very first (most recent) entry’s date
+      const dateMatch = entries[0].name.match(/^(\d{4}(?:-\d{2}-\d{2})?)/);
+      if (dateMatch) {
+        const lastDate = new Date(dateMatch[1]);
+        const [nRaw, unitRaw] = freqText.split(' ');
+        const n = parseInt(nRaw, 10) || 0;
+        if (n > 0) {
+          const unit = unitRaw.toLowerCase();
+          switch (unit) {
+            case 'days':
+              lastDate.setDate(lastDate.getDate() + n);
+              break;
+            case 'weeks':
+              lastDate.setDate(lastDate.getDate() + n * 7);
+              break;
+            case 'months':
+              lastDate.setMonth(lastDate.getMonth() + n);
+              break;
+            case 'years':
+              lastDate.setFullYear(lastDate.getFullYear() + n);
+              break;
+          }
+          nextDateStr = lastDate.toISOString().slice(0,10);
         }
-        nextDateStr = lastDate.toISOString().slice(0,10);
       }
     }
 
-    // 4) render “Next Inspection Due” header
+    // 4) render Next Inspection Due header
     const dueDiv = document.createElement('div');
     dueDiv.classList.add('next-inspection');
     dueDiv.innerHTML = `
@@ -3843,20 +3844,38 @@ document.addEventListener('DOMContentLoaded', async () => {
       </h4>`;
     container.appendChild(dueDiv);
 
-    // 5) render each inspection entry
+    // 5) render each inspection folder
     for (const entry of entries) {
-      const [datePart, rest] = entry.name.split(' - ', 2);
-      const [actionPart, byPart] = (rest || '').split(' by ', 2);
+      // — extract date (YYYY or YYYY-MM-DD) & rest
+      const dateMatch = entry.name.match(/^(\d{4}(?:-\d{2}-\d{2})?)/);
+      const datePart  = dateMatch ? dateMatch[1] : 'TBD';
+      const restRaw   = dateMatch
+        ? entry.name.slice(dateMatch[1].length).replace(/^[_-]+/, '')
+        : '';
 
+      // — split on first “ by ”
+      const [actRaw, byRaw] = restRaw.split(/ by /i);
+      const inspectorPart = (byRaw || '').trim() || 'TBD';
+
+      // — normalize action: hyphens/underscores → spaces, Title-Case words
+      const actionPart = (actRaw || '')
+        .replace(/[_-]+/g, ' ')
+        .trim()
+        .split(/\s+/)
+        .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+        .join(' ')
+        .trim() || 'TBD';
+
+      // container for this entry
       const entryDiv = document.createElement('div');
       entryDiv.classList.add('inspection-entry');
 
       // header
       const header = document.createElement('h4');
-      header.textContent = `${datePart} - ${actionPart} by ${byPart}`;
+      header.textContent = `${datePart} – ${actionPart} by ${inspectorPart}`;
       entryDiv.appendChild(header);
 
-      // summary (first line of summary.txt, if present)
+      // one-line summary
       const summary = document.createElement('p');
       summary.classList.add('inspection-summary');
       try {
@@ -3884,6 +3903,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         thumbRow.appendChild(img);
       });
 
+      // “+ N more” button
       const totalImgs = files.filter(f => !f.isDirectory).length;
       if (totalImgs > 5) {
         const more = document.createElement('button');
@@ -3903,9 +3923,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       repairs.classList.add('inspection-repairs');
       entryDiv.appendChild(repairs);
 
+      // append to main container
       container.appendChild(entryDiv);
     }
   }
+
 
 
 }); // end DOMContentLoaded
