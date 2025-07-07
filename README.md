@@ -154,6 +154,8 @@ ADMIN CONTROl
 
 * Impliment the calculation for determining what should be the order of repairs (Sort by: Repair Priority) -->  Out of 100, it's somthing like x times 0.3 + y times 0.5 + z times 0.2
 
+Ask Khodi
+- Clarify how the Next Inspection Date is calculated (repair frequency, etc.)
 
 
 ---
