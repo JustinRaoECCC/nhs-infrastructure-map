@@ -138,14 +138,13 @@ nhs-infrastructure-map/
 ## Current Bugs / TODO List
 
 
-3. Active becomes inactive
-
 8. Be able to create a folder as an inspection (based off of the name convention) and be able to upload documents/photos to it
   - First 6 photos displayed only
   - Follow photo Khodi sent as a template
   - Next inspection date is coming from inspection frequency
 9. Fix up documents tab
 10. "Enter" button works
+11. Display the Inactive Stations greyed out a bit maybe
 
 ADMIN CONTROl
 - Log in as Admin OR Log in as Guest
