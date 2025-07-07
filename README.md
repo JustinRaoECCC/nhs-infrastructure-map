@@ -156,6 +156,7 @@ ADMIN CONTROl
 
 Ask Khodi
 - Clarify how the Next Inspection Date is calculated (repair frequency, etc.)
+    - Currently choses the date based off the frequency of the repair with highest priority (if it is tied it chooses the oldest one (last added)
 
 
 ---

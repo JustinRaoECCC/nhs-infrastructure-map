@@ -2106,6 +2106,20 @@ document.addEventListener('DOMContentLoaded', async () => {
       await loadDataAndInitialize();      // reloads allStationData
       updateActiveViewDisplay();         // re-paints map, list or priority view
 
+      try {
+        const allStations = await window.electronAPI.getStationData();
+        const updated = allStations.find(s => s.stationId === stationId);
+        if (updated) {
+          currentStationDetailData.overview['Frequency'] = updated['Frequency'] || '';
+        }
+      } catch (err) {
+        console.error('Failed to refresh station frequency:', err);
+      }
+
+      const activeTab = document.querySelector('.detail-nav-btn.active')?.dataset.section;
+      if (activeTab === 'inspectionHistory') {
+        await renderInspectionHistorySection();
+      }
       
       // 5) refresh the quick‐view panel if it’s open on this station
       if (currentEditingStation && currentEditingStation.stationId === stationId) {
