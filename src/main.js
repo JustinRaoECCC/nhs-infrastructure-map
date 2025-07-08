@@ -1615,6 +1615,48 @@ ipcMain.handle('add-documents', async (_evt, destFolder, filePaths) => {
   }
 });
 
+/**
+ * add-inspection:
+ *   stationId, inspectionFolderName,
+ *   photoPaths:Array<string>, reportPath:string,
+ *   meta: { date, author, comment }
+ */
+ipcMain.handle('add-inspection', async (_evt, stationId, folderName, photoPaths, reportPath, { date, author, comment }) => {
+  try {
+    // 1) locate station base folder
+    const entries = await fsPromises.readdir(BASE_STATIONS_PATH, { withFileTypes:true });
+    const match = entries.find(d =>
+      d.isDirectory() && d.name.toUpperCase().endsWith(`_${stationId.toUpperCase()}`)
+    );
+    if (!match) throw new Error('Station folder not found');
+    const stationFolder = path.join(BASE_STATIONS_PATH, match.name);
+    const inspRoot = path.join(stationFolder, folderName);
+    const photosDir = path.join(inspRoot, 'Photos');
+
+    // 2) make dirs
+    await fsPromises.mkdir(photosDir, { recursive:true });
+
+    // 3) copy photos
+    for (const src of photoPaths) {
+      await fsPromises.copyFile(src, path.join(photosDir, path.basename(src)));
+    }
+
+    // 4) copy PDF report
+    if (reportPath) {
+      await fsPromises.copyFile(reportPath, path.join(inspRoot, path.basename(reportPath)));
+    }
+
+    // 5) write description.txt
+    const desc = `Date: ${date}\nAuthor: ${author}\n\n${comment}`;
+    await fsPromises.writeFile(path.join(inspRoot, 'description.txt'), desc, 'utf8');
+
+    return { success: true };
+  } catch (err) {
+    console.error('add-inspection error:', err);
+    return { success: false, message: err.message };
+  }
+});
+
 
 // ─── Electron Window Setup ──────────────────────────────────────────────────
 

@@ -93,4 +93,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   addDocuments:             (destFolder, files)  => ipcRenderer.invoke('add-documents', destFolder, files),
 
   deleteStation: (stationId) => ipcRenderer.invoke('delete-station', stationId),
+
+  // Add a new inspection folder + files
+  addInspection: (stationId, folderName, photos, report, meta) => ipcRenderer.invoke('add-inspection', stationId, folderName, photos, report, meta),
 });
