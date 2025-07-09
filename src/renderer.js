@@ -3883,6 +3883,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const actionPart = rawTitle
         .replace(/[_-]+/g,' ')
         .split(/\s+/)
+        .filter(Boolean) 
         .map(w=> w[0].toUpperCase()+w.slice(1).toLowerCase())
         .join(' ') || 'Inspection';
 

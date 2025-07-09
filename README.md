@@ -142,7 +142,7 @@ nhs-infrastructure-map/
   - First 6 photos displayed only
   - Follow photo Khodi sent as a template
   - Next inspection date is coming from inspection frequency
-
+(almost done)
 
 * Inspection Report PDF
 * + n more button smaller
