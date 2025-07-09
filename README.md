@@ -142,6 +142,13 @@ nhs-infrastructure-map/
   - First 6 photos displayed only
   - Follow photo Khodi sent as a template
   - Next inspection date is coming from inspection frequency
+
+
+* Inspection Report PDF
+* + n more button smaller
+* Construction History isnt displaying the description
+
+
 9. Fix up documents tab
 10. "Enter" button works
 11. Display the Inactive Stations greyed out a bit maybe

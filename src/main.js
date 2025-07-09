@@ -1647,8 +1647,18 @@ ipcMain.handle('add-inspection', async (_evt, stationId, folderName, photoPaths,
     }
 
     // 5) write description.txt
-    const desc = `Date: ${date}\nAuthor: ${author}\n\n${comment}`;
-    await fsPromises.writeFile(path.join(inspRoot, 'description.txt'), desc, 'utf8');
+    const descLines = [
+      'Description:',
+      comment,
+      '',
+      'Inspector:',
+      author
+    ];
+    await fsPromises.writeFile(
+      path.join(inspRoot, 'description.txt'),
+      descLines.join('\n'),
+      'utf8'
+    );
 
     return { success: true };
   } catch (err) {
@@ -1657,6 +1667,19 @@ ipcMain.handle('add-inspection', async (_evt, stationId, folderName, photoPaths,
   }
 });
 
+ipcMain.handle('read-text-file', async (event, filePath) => {
+  // returns the file as a string, or throws if it fails
+  return await fs.promises.readFile(filePath, 'utf8');
+});
+
+ipcMain.handle('get-file-stats', async (_evt, filePath) => {
+  try {
+    const stats = await fsP.stat(filePath);
+    return { mtime: stats.mtimeMs };
+  } catch {
+    return { mtime: 0 };
+  }
+});
 
 // ─── Electron Window Setup ──────────────────────────────────────────────────
 

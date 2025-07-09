@@ -107,6 +107,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const detailSections       = {
     overview:            document.getElementById('overviewSection'),
     inspectionHistory:   document.getElementById('inspectionHistorySection'),
+    constructionHistory: document.getElementById('constructionHistorySection'),
     highPriorityRepairs: document.getElementById('highPriorityRepairsSection'),
     documents:           document.getElementById('documentsSection'),
     photos:              document.getElementById('photosSection')
@@ -2510,6 +2511,9 @@ document.addEventListener('DOMContentLoaded', async () => {
           case 'inspectionHistory':
             await renderInspectionHistorySection();
             break;
+          case 'constructionHistory':
+            await renderConstructionHistorySection();
+            break;
           case 'highPriorityRepairs':
             // call your new editable repairs UI
             await renderRepairsSection(
@@ -3794,179 +3798,183 @@ document.addEventListener('DOMContentLoaded', async () => {
     const container = detailSections.inspectionHistory;
     container.innerHTML = '';
 
-    // 1) fetch the real folder contents (only top-level dirs)
-    const stationFolderPath = currentStationDetailData.stationFolder;
+    // 1) List only top-level inspection folders
+    const root = currentStationDetailData.stationFolder;
     let rawEntries = [];
     try {
-      rawEntries = await window.electronAPI.listDirectoryContents(stationFolderPath);
-    } catch (err) {
-      console.error('Could not read station folder:', err);
+      rawEntries = await window.electronAPI.listDirectoryContents(root);
+    } catch (e) {
+      console.error('[Inspection] could not list directory:', e);
     }
 
-    // 2) only keep directories whose name starts with YYYY or YYYY-MM-DD
-    const entries = rawEntries.filter(
-      e => e.isDirectory && /^\d{4}(?:-\d{2}-\d{2})?/.test(e.name)
+    // 2) Keep only names like “YYYY…” or “YYYY-MM-DD…”
+    const entries = rawEntries.filter(e =>
+      e.isDirectory && /inspection|assessment/i.test(e.name)
     );
-
-    // 3) If there are none, show placeholder and bail
     if (entries.length === 0) {
       container.innerHTML = '<p>No inspection history found.</p>';
       return;
     }
 
-    // 4) compute “Next Inspection Due”
-    let nextDateStr = 'TBD';
-    const freqText = currentStationDetailData.overview['Frequency'] || '';
-    if (freqText) {
-      // find the most recent folder by date prefix
-      entries.sort((a, b) => {
-        const toMillis = name => {
-          const m = name.match(/^(\d{4}(?:-\d{2}-\d{2})?)/);
-          const raw = m ? m[1] : '';
-          const d = new Date(raw);
-          return isNaN(d) ? 0 : d.getTime();
+    // 3) Compute “Next Inspection Due”
+    let nextDate = 'TBD';
+    const freq = currentStationDetailData.overview['Frequency'] || '';
+    if (freq) {
+      // sort descending by date
+      entries.sort((a,b) => {
+        const t = nm => {
+          const m = nm.match(/^(\d{4}(?:-\d{2}-\d{2})?)/);
+          return m ? new Date(m[1]).getTime() : 0;
         };
-        return toMillis(b.name) - toMillis(a.name);
+        return t(b.name) - t(a.name);
       });
-
       const m = entries[0].name.match(/^(\d{4}(?:-\d{2}-\d{2})?)/);
       if (m) {
-        const lastDate = new Date(m[1]);
-        const [nRaw, unitRaw] = freqText.split(' ');
-        const n = parseInt(nRaw, 10) || 0;
-        if (n > 0) {
-          switch (unitRaw.toLowerCase()) {
-            case 'days':   lastDate.setDate(lastDate.getDate() + n);      break;
-            case 'weeks':  lastDate.setDate(lastDate.getDate() + n * 7);  break;
-            case 'months': lastDate.setMonth(lastDate.getMonth() + n);    break;
-            case 'years':  lastDate.setFullYear(lastDate.getFullYear() + n); break;
+        const d = new Date(m[1]);
+        const [nRaw, unit] = freq.split(' ');
+        const n = parseInt(nRaw,10) || 0;
+        if (n>0) {
+          switch(unit.toLowerCase()){
+            case 'days':   d.setDate(d.getDate()+n); break;
+            case 'weeks':  d.setDate(d.getDate()+7*n); break;
+            case 'months': d.setMonth(d.getMonth()+n); break;
+            case 'years':  d.setFullYear(d.getFullYear()+n); break;
           }
-          nextDateStr = lastDate.toISOString().slice(0,10);
+          nextDate = d.toISOString().slice(0,10);
         }
       }
     }
 
-    // 5) render Next Inspection Due + button
+    // 4) Render Next-Due bar
     const dueDiv = document.createElement('div');
     dueDiv.classList.add('next-inspection');
     dueDiv.innerHTML = `
       <h4>
-        <span class="next-date">${nextDateStr}</span> –
+        <span class="next-date">${nextDate}</span> –
         <em>Next Inspection Due</em>
-      </h4>`;
-    const addInspBtn = document.createElement('button');
-    addInspBtn.textContent = '＋ Add Inspection';
-    addInspBtn.style.marginLeft = '20px';
-    addInspBtn.title = 'Add a new inspection';
-    addInspBtn.onclick = () =>
-      showAddInspectionDialog(currentStationDetailData.stationId);
-    dueDiv.appendChild(addInspBtn);
+      </h4>
+    `;
+    const addBtn = document.createElement('button');
+    addBtn.textContent = '＋ Add Inspection';
+    addBtn.style.marginLeft = '12px';
+    addBtn.onclick = () => showAddInspectionDialog(currentStationDetailData.stationId);
+    dueDiv.appendChild(addBtn);
     container.appendChild(dueDiv);
 
-    // 6) sort descending by date prefix
-    entries.sort((a, b) => {
-      const toMillis = name => {
-        const m = name.match(/^(\d{4}-\d{2}-\d{2})/);
-        const raw = m ? m[1] : (name.match(/^(\d{4})/)||[])[1] || '';
+    // 5) Resort descending by full YYYY-MM-DD if present
+    entries.sort((a,b) => {
+      const t = nm => {
+        const m = nm.match(/^(\d{4}-\d{2}-\d{2})/);
+        const raw = m ? m[1] : (nm.match(/^(\d{4})/)||[])[1];
         const d = new Date(raw);
         return isNaN(d) ? 0 : d.getTime();
       };
-      return toMillis(b.name) - toMillis(a.name);
+      return t(b.name)-t(a.name);
     });
 
-    // 7) render each inspection folder
-    for (const entry of entries) {
-      const dateMatch = entry.name.match(/^(\d{4}(?:-\d{2}-\d{2})?)/);
-      const datePart  = dateMatch ? dateMatch[1] : 'TBD';
-      const restRaw   = dateMatch
-        ? entry.name.slice(dateMatch[1].length).replace(/^[_-]+/, '')
-        : '';
-      const [actRaw, byRaw] = restRaw.split(/ by /i);
-      const actionPart    = (actRaw || '')
-        .replace(/[_-]+/g,' ').trim()
-        .split(/\s+/).map(w=>w[0].toUpperCase()+w.slice(1).toLowerCase()).join(' ') || 'TBD';
-      const inspectorPart = (byRaw||'').trim() || 'TBD';
+    // 6) Process each inspection folder
+    for (const ent of entries) {
+      console.log('[Inspection] ▶ Processing folder:', ent.path);
 
+      // parse date & title
+      const dm = ent.name.match(/^(\d{4}(?:-\d{2}-\d{2})?)(?:[_-]*(.*))?$/);
+      const datePart = dm[1];
+      const rawTitle = dm[2] || '';
+      const actionPart = rawTitle
+        .replace(/[_-]+/g,' ')
+        .split(/\s+/)
+        .map(w=> w[0].toUpperCase()+w.slice(1).toLowerCase())
+        .join(' ') || 'Inspection';
+
+      // read & parse the description.txt
+      let descriptionText = '';
+      let inspectorName   = '';
+      try {
+        const txt = await window.electronAPI.readTextFile(`${ent.path}/description.txt`);
+        console.log('[Inspection] raw description.txt:', txt);
+        let section = null;
+        for (let line of txt.split(/\r?\n/)) {
+          line = line.trim();
+          if (/^Description:/i.test(line)) { section='desc'; continue; }
+          if (/^Inspector:/i.test(line))   { section='insp'; continue; }
+          if (section==='desc' && line)    descriptionText += (descriptionText?'\n':'')+line;
+          if (section==='insp' && line)    inspectorName   = line;
+        }
+        console.log('[Inspection] parsed description:', descriptionText);
+        console.log('[Inspection] parsed inspector:', inspectorName);
+      } catch (e) {
+        console.warn('[Inspection] could not read description.txt:', e);
+      }
+
+      // build the entry DIV
       const entryDiv = document.createElement('div');
       entryDiv.classList.add('inspection-entry');
 
-      const header = document.createElement('h4');
-      header.textContent = `${datePart} – ${actionPart} by ${inspectorPart}`;
-      entryDiv.appendChild(header);
+      // header line with “by …”
+      const h4 = document.createElement('h4');
+      h4.textContent = `${datePart} – ${actionPart}` +
+        (inspectorName ? ` by ${inspectorName}` : '');
+      entryDiv.appendChild(h4);
 
-      const summary = document.createElement('p');
-      summary.classList.add('inspection-summary');
-      try {
-        const txt = await window.electronAPI.openFileText(`${entry.path}/description.txt`);
-        summary.textContent = txt.split(/\r?\n/)[0];
-      } catch {
-        summary.textContent = '';
+      // description paragraph
+      if (descriptionText) {
+        const p = document.createElement('p');
+        p.textContent = descriptionText;
+        entryDiv.appendChild(p);
       }
-      entryDiv.appendChild(summary);
 
-      // ─── Thumbnails row: any images inside the inspection folder itself ─────────────────
+      // thumbnails (up to 5)
       const thumbRow = document.createElement('div');
       thumbRow.classList.add('inspection-thumbs');
-
-      let files = [];
+      let allFiles = [];
       try {
-        files = await window.electronAPI.listDirectoryContents(entry.path);
-      } catch (err) {
-        console.warn(`Failed to list contents of ${entry.path}:`, err);
+        allFiles = await window.electronAPI.listDirectoryContentsRecursive(ent.path);
+      } catch (e) {
+        console.warn('[Inspection] could not recurse:', e);
       }
-
-      // filter only image files
-      const imageFiles = files.filter(
-        f => !f.isDirectory && /\.(jpe?g|png|gif|bmp)$/i.test(f.name)
-      );
-      const images = imageFiles.slice(0, 5);
-
-      images.forEach(imgItem => {
+      const imgs = allFiles
+        .filter(f=>!f.isDirectory && /\.(jpe?g|png|gif|bmp)$/i.test(f.name))
+        .slice(0,5);
+      imgs.forEach(imgItem=>{
         const img = document.createElement('img');
-        img.src     = `file://${imgItem.path}`;
-        img.title   = imgItem.name;
-        img.onclick = () => {
-          currentPhotoFolder = entry.path;
+        img.src = `file://${imgItem.path}`;
+        img.title = imgItem.name;
+        img.onclick = ()=>{
+          currentPhotoFolder = ent.path;
           document.querySelector('.detail-nav-btn[data-section="photos"]').click();
         };
         thumbRow.appendChild(img);
       });
-
-      // “+ N more” button
-      if (imageFiles.length > 5) {
+      const totalImgs = allFiles.filter(f=>!f.isDirectory && /\.(jpe?g|png|gif|bmp)$/i.test(f.name)).length;
+      if (totalImgs>5) {
         const more = document.createElement('button');
-        more.classList.add('inspection-more');
-        more.textContent = `+ ${imageFiles.length - 5} more`;
-        more.onclick = () => {
-          currentPhotoFolder = entry.path;
+        more.textContent = `+ ${totalImgs-5} more`;
+        more.onclick = ()=>{
+          currentPhotoFolder = ent.path;
           document.querySelector('.detail-nav-btn[data-section="photos"]').click();
         };
         thumbRow.appendChild(more);
       }
-
       entryDiv.appendChild(thumbRow);
 
-      // render PDFs
-      const allFiles = await window.electronAPI.listDirectoryContents(entry.path);
-      const pdfs = allFiles.filter(f => !f.isDirectory && f.name.toLowerCase().endsWith('.pdf'));
-      if (pdfs.length) {
-        const pdfList = document.createElement('div');
-        pdfs.forEach(p => {
-          const a = document.createElement('a');
-          a.href      = `file://${p.path}`;
-          a.textContent = p.name;
-          a.target    = '_blank';
-          a.style     = 'display:block; margin-bottom:4px;';
-          pdfList.appendChild(a);
-        });
-        entryDiv.appendChild(pdfList);
-      }
+      // any PDFs in that folder
+      let docs = [];
+      try {
+        docs = await window.electronAPI.listDirectoryContents(ent.path);
+      } catch {}
+      docs.filter(f=>!f.isDirectory && f.name.toLowerCase().endsWith('.pdf'))
+          .forEach(p=>{
+            const a = document.createElement('a');
+            a.href = `file://${p.path}`;
+            a.textContent = p.name;
+            a.target = '_blank';
+            a.style.display = 'block';
+            entryDiv.appendChild(a);
+          });
 
       container.appendChild(entryDiv);
     }
   }
-
-
 
   /**
    * showAddInspectionDialog(stationId)
@@ -4006,13 +4014,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                 style="width:100%; margin-top:4px; padding:6px; font-size:1rem;"/>
         </label>
         <label style="display:block; margin-bottom:12px;">
-          Name:
+          Site Name:
           <input type="text" id="inspName"
                 placeholder="e.g. Cableway Engineering"
                 style="width:100%; margin-top:4px; padding:6px; font-size:1rem;"/>
         </label>
         <label style="display:block; margin-bottom:12px;">
-          Author:
+          Inspector Name:
           <input type="text" id="inspAuthor"
                 style="width:100%; margin-top:4px; padding:6px; font-size:1rem;"/>
         </label>
@@ -4033,7 +4041,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         <div style="margin-bottom:8px;">
           <button type="button" id="pickReports"
                   style="padding:8px 12px; font-size:1rem;">
-            Select PDF Reports…
+            Select Inspection Report (as one pdf)…
           </button>
           <div id="reportList" style="margin-top:8px;"></div>
         </div>
@@ -4147,6 +4155,125 @@ document.addEventListener('DOMContentLoaded', async () => {
       overlay.remove();
       await renderInspectionHistorySection();
     });
+  }
+
+  async function renderConstructionHistorySection() {
+    const container = detailSections.constructionHistory;
+    container.innerHTML = '';
+
+    // 1) Read the station root folder
+    const root = currentStationDetailData.stationFolder;
+    let rawEntries = [];
+    try {
+      rawEntries = await window.electronAPI.listDirectoryContents(root);
+    } catch (e) {
+      console.error('[Construction] could not list directory:', e);
+    }
+
+    // 2) Filter OUT anything with “Inspection” or “Assessment” in the name
+    const entries = rawEntries.filter(e =>
+      e.isDirectory && !/inspection|assessment/i.test(e.name)
+    );
+
+    if (entries.length === 0) {
+      container.innerHTML = '<p>No construction history found.</p>';
+      return;
+    }
+
+    // 3) Sort descending by any leading YYYY or YYYY-MM-DD
+    entries.sort((a, b) => {
+      const parseDate = name => {
+        const m = name.match(/^(\d{4}(?:-\d{2}-\d{2})?)/);
+        return m ? new Date(m[1]).getTime() : 0;
+      };
+      return parseDate(b.name) - parseDate(a.name);
+    });
+
+    // 4) Render each entry exactly like your inspection entries,
+    //    but skip the “Next Due” bar and “+ Add” button part
+    for (const ent of entries) {
+      // parse date & title from folder name
+      const dm = ent.name.match(/^(\d{4}(?:-\d{2}-\d{2})?)(?:[_-]*(.*))?$/);
+      const datePart  = dm[1];
+      const rawTitle  = dm[2] || '';
+      const titleText = rawTitle
+        .replace(/[_-]+/g, ' ')
+        .replace(/\b\w/g, c => c.toUpperCase())
+        .trim() || 'Event';
+
+      const entryDiv = document.createElement('div');
+      entryDiv.classList.add('inspection-entry');
+
+      // Header
+      const h4 = document.createElement('h4');
+      h4.textContent = `${datePart} – ${titleText}`;
+      entryDiv.appendChild(h4);
+
+      // description.txt parsing (optional — copy from inspection renderer if you like)
+      // … you can duplicate your description.txt code here if needed …
+
+      // Thumbnails (up to 5), same as inspection
+      const thumbRow = document.createElement('div');
+      thumbRow.classList.add('inspection-thumbs');
+
+      let allFiles = [];
+      try {
+        allFiles = await window.electronAPI.listDirectoryContentsRecursive(ent.path);
+      } catch (err) {
+        console.warn('[Construction] error recursing:', err);
+      }
+
+      const imgs = allFiles
+        .filter(f => !f.isDirectory && /\.(jpe?g|png|gif|bmp)$/i.test(f.name))
+        .slice(0, 5);
+
+      imgs.forEach(imgItem => {
+        const img = document.createElement('img');
+        img.src = `file://${imgItem.path}`;
+        img.title = imgItem.name;
+        img.onclick = () => {
+          // mimic your inspection thumb clicks
+          currentPhotoFolder = ent.path;
+          document.querySelector('.detail-nav-btn[data-section="photos"]').click();
+        };
+        thumbRow.appendChild(img);
+      });
+
+      // “+ N more” if there are more than 5
+      const totalImgs = allFiles.filter(f => !f.isDirectory && /\.(jpe?g|png|gif|bmp)$/i.test(f.name)).length;
+      if (totalImgs > 5) {
+        const more = document.createElement('button');
+        more.textContent = `+ ${totalImgs - 5} more`;
+        more.onclick = () => {
+          currentPhotoFolder = ent.path;
+          document.querySelector('.detail-nav-btn[data-section="photos"]').click();
+        };
+        thumbRow.appendChild(more);
+      }
+
+      entryDiv.appendChild(thumbRow);
+
+      // PDF links
+      let docs = [];
+      try {
+        docs = await window.electronAPI.listDirectoryContents(ent.path);
+      } catch (err) {
+        console.warn('[Construction] could not list docs:', err);
+      }
+
+      docs
+        .filter(f => !f.isDirectory && f.name.toLowerCase().endsWith('.pdf'))
+        .forEach(p => {
+          const a = document.createElement('a');
+          a.href = `file://${p.path}`;
+          a.textContent = p.name;
+          a.target = '_blank';
+          a.style.display = 'block';
+          entryDiv.appendChild(a);
+        });
+
+      container.appendChild(entryDiv);
+    }
   }
 
 

@@ -762,3 +762,26 @@ body, html {
 .btn-secondary:hover {
   background: #d5d5d5;
 }
+
+.docs-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+}
+.docs-table th,
+.docs-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid #e0e0e0;
+  text-align: left;
+}
+.docs-table th {
+  background-color: #fafafa;
+  font-weight: 600;
+}
+.docs-table a {
+  color: #0077cc;
+  text-decoration: none;
+}
+.docs-table a:hover {
+  text-decoration: underline;
+}

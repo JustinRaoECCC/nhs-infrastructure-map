@@ -96,4 +96,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Add a new inspection folder + files
   addInspection: (stationId, folderName, photos, report, meta) => ipcRenderer.invoke('add-inspection', stationId, folderName, photos, report, meta),
+  readTextFile: (filePath) => ipcRenderer.invoke('read-text-file', filePath),
 });
