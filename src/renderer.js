@@ -797,9 +797,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         : getComboColor(st.category, provinceOf(st));
 
       // Create a marker
+      // dim out inactive or mothballed stations
+      const isDimmed = st.Status === 'Inactive' || st.Status === 'Mothballed' || st.Status === 'Unknown';
+
       const marker = L.marker([lat, lon], {
-        icon: createColoredIcon(color)
+        icon:    createColoredIcon(color),
+        opacity: isDimmed ? 0.4 : 1.0
       });
+      
 
       // Hover to show quick-view
       marker.on('mouseover', () => {
@@ -4028,17 +4033,22 @@ document.addEventListener('DOMContentLoaded', async () => {
       // any PDFs in that folder
       let docs = [];
       try {
-        docs = await window.electronAPI.listDirectoryContents(ent.path);
+        docs = await window.electronAPI.listDocumentContents(ent.path);
       } catch {}
-      docs.filter(f=>!f.isDirectory && f.name.toLowerCase().endsWith('.pdf'))
-          .forEach(p=>{
-            const a = document.createElement('a');
-            a.href = `file://${p.path}`;
-            a.textContent = p.name;
-            a.target = '_blank';
-            a.style.display = 'block';
-            entryDiv.appendChild(a);
-          });
+      docs
+        .filter(f =>
+          !f.isDirectory &&
+          f.name.toLowerCase().endsWith('.pdf') &&
+          f.name.toLowerCase().includes('inspection')
+        )
+        .forEach(p => {
+          const btn = document.createElement('button');
+          btn.textContent = p.name;
+          btn.style.display = 'block';
+          btn.addEventListener('click', () => showPdfOverlay(p));
+          entryDiv.appendChild(btn);
+        });
+
 
 
       // ————— Add a “Delete” button —————
@@ -4062,6 +4072,41 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       container.appendChild(entryDiv);
     }
+  }
+
+  /**
+   * showPdfOverlay(pdfItem)
+   *   Opens a full-screen overlay with an <iframe> that displays the PDF.
+   *   Click anywhere to close.
+   */
+  function showPdfOverlay(pdfItem) {
+    // 1) Create the semi-transparent backdrop
+    const overlay = document.createElement('div');
+    overlay.style = `
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+    `;
+    overlay.addEventListener('click', () => overlay.remove());
+
+    // 2) Create the iframe pointing at our PDF
+    const frame = document.createElement('iframe');
+    frame.src = `file://${pdfItem.path}`;
+    frame.style = `
+      width: 90%;
+      height: 90%;
+      border: none;
+      box-shadow: 0 0 10px rgba(0,0,0,0.5);
+    `;
+    // prevent clicks inside iframe from closing overlay
+    frame.addEventListener('click', e => e.stopPropagation());
+
+    overlay.appendChild(frame);
+    document.body.appendChild(overlay);
   }
 
   /**
@@ -4218,16 +4263,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 6) Wire up “Select PDF Reports…”
     box.querySelector('#pickReports').onclick = async () => {
       const files = await window.electronAPI.selectDocumentFiles();
-      files.forEach(f => {
-        if (f.toLowerCase().endsWith('.pdf') && !reportPaths.includes(f)) {
-          reportPaths.push(f);
-        }
-      });
+      // filter to PDFs, then only take the first one
+      const pdfs = files.filter(f => f.toLowerCase().endsWith('.pdf'));
+      reportPaths = pdfs.length ? [ pdfs[0] ] : [];
       renderList(reportListDiv, reportPaths, p => {
-        reportPaths = reportPaths.filter(x => x !== p);
-        renderList(reportListDiv, reportPaths, p => { /* recusive */ });
+        // allow removing the selected PDF
+        reportPaths = [];
+        renderList(reportListDiv, reportPaths, () => {});
       });
     };
+
 
     // 7) Cancel
     box.querySelector('#cancelInsp').addEventListener('click', () => {
