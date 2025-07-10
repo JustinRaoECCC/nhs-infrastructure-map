@@ -1647,7 +1647,12 @@ ipcMain.handle('add-inspection', async (_evt, stationId, folderName, photoPaths,
 
     // 4) copy PDF report
     if (reportPath) {
-      await fsPromises.copyFile(reportPath, path.join(inspRoot, path.basename(reportPath)));
+      const ext      = path.extname(reportPath);
+      const destName = `Inspection Report${ext}`;
+      await fsPromises.copyFile(
+        reportPath,
+        path.join(inspRoot, destName)
+      );
     }
 
     // 5) write description.txt

@@ -4043,7 +4043,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         )
         .forEach(p => {
           const btn = document.createElement('button');
-          btn.textContent = p.name;
+          btn.textContent = 'Inspection Report';
           btn.style.display = 'block';
           btn.addEventListener('click', () => showPdfOverlay(p));
           entryDiv.appendChild(btn);
