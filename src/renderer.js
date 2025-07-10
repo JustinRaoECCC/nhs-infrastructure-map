@@ -3954,6 +3954,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           currentPhotoFolder = ent.path;
           document.querySelector('.detail-nav-btn[data-section="photos"]').click();
         };
+        more.classList.add('inspection-more');
         thumbRow.appendChild(more);
       }
       entryDiv.appendChild(thumbRow);
