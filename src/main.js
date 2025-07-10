@@ -29,6 +29,10 @@ const { point, booleanPointInPolygon } = require('@turf/turf');
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const LOOKUPS_PATH = path.join(DATA_DIR, 'lookups.xlsx');
 
+// Used for deleting an inspection
+const rimraf = require('rimraf');
+
+
 /** Helper to ensure the data folder exists
  */
 if (!fs.existsSync(DATA_DIR)) {
@@ -1680,8 +1684,6 @@ ipcMain.handle('get-file-stats', async (_evt, filePath) => {
     return { mtime: 0 };
   }
 });
-
-const rimraf = require('rimraf');
 
 ipcMain.handle('delete-folder', (event, folderPath) => {
   return new Promise(resolve => {
