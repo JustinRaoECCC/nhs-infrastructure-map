@@ -577,7 +577,7 @@ body, html {
   border-radius: 6px;
   font-size: 1em;
   box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-  z-index: 10000;
+  z-index: 20000;
   white-space: nowrap;
 }
 
@@ -817,3 +817,4 @@ body, html {
 .delete-inspection-btn:hover {
   opacity: 0.8;
 }
+

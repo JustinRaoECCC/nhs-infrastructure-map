@@ -2476,6 +2476,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     img.style.maxWidth = '90%';
     img.style.maxHeight = '90%';
     overlay.appendChild(img);
+
+    // ─── Keyboard handling ───────────────────────────────────────────────
+    function imageKeyHandler(e) {
+      if (e.key === 'Escape') {
+        document.removeEventListener('keydown', imageKeyHandler);
+        overlay.remove();
+      }
+    }
+    document.addEventListener('keydown', imageKeyHandler);
+
     overlay.onclick = () => overlay.remove();
     document.body.appendChild(overlay);
   }
@@ -2696,8 +2706,30 @@ document.addEventListener('DOMContentLoaded', async () => {
   let repairInfos         = [];
 
   // Show/hide modal
-  function openModal()   { addInfraModal.style.display = 'flex'; }
-  function closeModal()  { addInfraModal.style.display = 'none'; resetModal(); }
+  function openModal() {
+    addInfraModal.style.display = 'flex';
+    // ─── Keyboard handling ───────────────────────────────────────────────
+    function infraKeyHandler(e) {
+      if (e.key === 'Escape') {
+        document.removeEventListener('keydown', infraKeyHandler);
+        closeModal();
+      }
+      if (e.key === 'Enter') {
+        // only if the Save button is visible
+        const btn = document.getElementById('btnCreateStation');
+        if (!btn.disabled && btn.style.display !== 'none') {
+          document.removeEventListener('keydown', infraKeyHandler);
+          btn.click();
+        }
+     }
+    }
+    document.addEventListener('keydown', infraKeyHandler);
+  }  
+   
+  function closeModal() {
+    addInfraModal.style.display = 'none';
+    resetModal();
+  }
 
   
   btnAddInfra.addEventListener('click', async () => {
@@ -3442,6 +3474,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     `;
     overlay.appendChild(box);
 
+    // ─── Keyboard handling ───────────────────────────────────────────────
+    function photosKeyHandler(e) {
+      if (e.key === 'Escape') {
+        document.removeEventListener('keydown', photosKeyHandler);
+        overlay.remove();
+      }
+      if (e.key === 'Enter') {
+        document.removeEventListener('keydown', photosKeyHandler);
+        box.querySelector('#okAddPhotos').click();
+      }
+    }
+    document.addEventListener('keydown', photosKeyHandler);
+
+
     // 3) Fetch & populate existing subfolders
     const root = currentStationDetailData.stationFolder;
     let subs = [];
@@ -3480,7 +3526,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       } else if (choice === 'new') {
         const nm = newInput.value.trim();
         if (!nm) {
-          alert('Please type a folder name.');
+          showAlert('Please type a folder name.', 2000);
           return;
         }
         dest = `${root}/${nm}`;
@@ -3699,6 +3745,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     `;
     overlay.appendChild(box);
 
+    // ─── Keyboard handling ───────────────────────────────────────────────
+    function docsKeyHandler(e) {
+      if (e.key === 'Escape') {
+        document.removeEventListener('keydown', docsKeyHandler);
+        overlay.remove();
+      }
+      if (e.key === 'Enter') {
+        document.removeEventListener('keydown', docsKeyHandler);
+        box.querySelector('#okAddDocuments').click();
+      }
+    }
+    document.addEventListener('keydown', docsKeyHandler);
+
     // 3) Fetch & populate existing subfolders 
     const root = currentStationDetailData.stationFolder;
     let subs = [];
@@ -3737,7 +3796,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       } else if (choice === 'new') {
         const nm = newInput.value.trim();
         if (!nm) {
-          alert('Please type a folder name.');
+          showAlert('Please type a folder name.', 2000);
           return;
         }
         dest = `${root}/${nm}`;
@@ -4012,6 +4071,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   async function showAddInspectionDialog(stationId) {
     // 1) Overlay
     const overlay = document.createElement('div');
+    overlay.tabIndex = -1;
     overlay.style = `
       position: fixed;
       top: 0; left: 0; right: 0; bottom: 0;
@@ -4022,6 +4082,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       z-index: 10000;
     `;
     document.body.appendChild(overlay);
+    overlay.focus();
 
     // 2) Dialog box
     const box = document.createElement('div');
@@ -4038,8 +4099,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       <h2 style="margin-top:0; font-size:1.5rem;">Add Inspection</h2>
       <div style="margin-bottom:16px;">
         <label style="display:block; margin-bottom:8px;">
-          Date:
-          <input type="date" id="inspDate"
+          Year:
+          <input type="number" id="inspDate"
                 style="width:100%; margin-top:4px; padding:6px; font-size:1rem;"/>
         </label>
         <label style="display:block; margin-bottom:12px;">
@@ -4088,6 +4149,19 @@ document.addEventListener('DOMContentLoaded', async () => {
       </div>
     `;
     overlay.appendChild(box);
+
+    function inspKeyHandler(e) {
+      // avoid accidental form submits/etc
+      if (e.key === 'Escape') {
+        overlay.remove();
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        box.querySelector('#saveInsp').click();
+      }
+    }
+    overlay.addEventListener('keydown', inspKeyHandler);
+
 
     // 3) State
     let photoPaths = [];
@@ -4157,6 +4231,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 7) Cancel
     box.querySelector('#cancelInsp').addEventListener('click', () => {
+      overlay.removeEventListener('keydown', inspKeyHandler);
       overlay.remove();
     });
 
@@ -4167,7 +4242,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const author  = box.querySelector('#inspAuthor').value.trim();
       const comment = box.querySelector('#inspComment').value.trim();
       if (!date || !name) {
-        alert('Date and Name are required.');
+        showAlert('Date and Name are required.', 2000);
         return;
       }
 
@@ -4181,6 +4256,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         { date, author, comment }
       );
 
+      overlay.removeEventListener('keydown', inspKeyHandler);
       overlay.remove();
       await renderInspectionHistorySection();
     });
