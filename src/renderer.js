@@ -73,10 +73,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       z: 0, x: 0, y: 0,
       r: ''  // no retina suffix
     };
-    console.log('→ loading tiles from:', L.Util.template(tp.url, testData));
 
     baseLayer = L.tileLayer(tp.url, tp.options).addTo(map);
-    console.log('Switched to basemap:', tp.name);
   }
 
   // 2) Long-press “nuke” button to cycle basemap
@@ -573,7 +571,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   // ────────────────────────────────────────────────────────────────────────────
   async function loadDataAndInitialize() {
     try {
-      console.log("Renderer: Requesting station data...");
       const rawData = await window.electronAPI.getStationData();
       rawData.forEach(st => {
         st.Status = normalizeStatus(st.Status);
@@ -596,7 +593,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         return hasLat && hasLon && hasId;
       });
 
-      console.log(`Renderer: Stations loaded: ${allStationData.length}`);
 
       // Rebuild filters and draw the map (or list, depending on current mode)
       populateFilters(allStationData);
@@ -604,7 +600,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       if (!isListViewActive && mapContainer && !mapContainer.classList.contains('hidden')) {
         setTimeout(() => {
-          console.log("Renderer: Invalidating map size on initial load.");
           map.invalidateSize();
         }, 100);
       }
@@ -790,7 +785,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Get the stations we should show
     const filtered = getFilteredStationData();
-    console.log("Renderer: Updating map with", filtered.length, "stations.");
 
     filtered.forEach(st => {
       const lat = parseFloat(st.latitude);
@@ -827,7 +821,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Finally, re-invalidate the map size so it draws correctly
     if (mapContainer && !isListViewActive && !mapContainer.classList.contains('hidden')) {
-      console.log("Renderer: Invalidating map size after map update.");
       map.invalidateSize();
     }
   }
@@ -877,7 +870,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     let lastGroupKey = null;
     const useGrouping = (currentSortOption === 'location' || currentSortOption === 'category');
 
-    console.log("Renderer: Updating list with", filtered.length, "stations.");
     if (filtered.length === 0) {
       const tr = stationListBody.insertRow();
       const td = tr.insertCell();
@@ -2376,7 +2368,6 @@ document.addEventListener('DOMContentLoaded', async () => {
    * Otherwise → shows image thumbnails in that folder + a back button.
    */
   async function renderPhotosTab(items) {
-    console.log('▶️ renderPhotosTab called, currentPhotoFolder=', currentPhotoFolder);
     const container = detailSections.photos;
     container.innerHTML = '';
 
@@ -3417,7 +3408,6 @@ document.addEventListener('DOMContentLoaded', async () => {
    *  • then copy via electronAPI.addPhotos().
    */
   async function showAddPhotosDialog() {
-    console.log('[AddPhotos] 🚀 showAddPhotosDialog invoked');
 
     // 1) Overlay
     const overlay = document.createElement('div');
@@ -3454,7 +3444,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 3) Fetch & populate existing subfolders
     const root = currentStationDetailData.stationFolder;
-    console.log('[AddPhotos] stationFolder =', root);
     let subs = [];
     try {
       const entries = await window.electronAPI.listDirectoryContents(root);
@@ -3479,7 +3468,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 5) Cancel
     box.querySelector('#cancelAddPhotos').onclick = () => {
-      console.log('[AddPhotos] Cancel clicked');
       overlay.remove();
     };
 
@@ -3497,7 +3485,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         dest = `${root}/${nm}`;
       }
-      console.log('[AddPhotos] destFolder =', dest);
       overlay.remove();
 
       const files = await window.electronAPI.selectPhotoFiles();
@@ -3554,7 +3541,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 2) If inside a subfolder, show back + contents of that folder
     if (currentDocumentFolder) {
-      console.log('[Docs] ▶ Inside subfolder:', currentDocumentFolder);
 
       // ← Back button
       const back = document.createElement('button');
@@ -3570,10 +3556,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       const entries = await window.electronAPI.listDocumentContents(currentDocumentFolder);
       hideLoadingMessage();
 
-      console.log('[Docs] entries from listDirectoryContents:', entries);
 
       const { folders, files } = groupDocuments(entries);
-      console.log('[Docs] grouped → folders:', folders.map(f=>f.name), 'files:', files.map(f=>f.name));
 
       // Sub-folder cards
       if (folders.length) {
@@ -3624,7 +3608,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 3) Top-level station folder (no longer hard-coded “…/Documents”)
     const docsRoot = stationFolder;
-    console.log('[Docs] ▶ Top-level docsRoot =', docsRoot);
 
     showLoadingMessage('Loading documents…');
     let entries = [];
@@ -3635,10 +3618,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     hideLoadingMessage();
 
-    console.log('[Docs] entries at top-level:', entries);
 
     const { folders, files } = groupDocuments(entries);
-    console.log('[Docs] grouped → folders:', folders.map(f=>f.name), 'files:', files.map(f=>f.name));
 
     // Folder cards
     if (folders.length) {
@@ -3683,7 +3664,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 
   async function showAddDocumentsDialog() {
-    console.log('[AddDocuments] 🚀 showAddDocumentsDialog invoked');
 
     // 1) Overlay
     const overlay = document.createElement('div');
@@ -3721,9 +3701,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 3) Fetch & populate existing subfolders 
     const root = currentStationDetailData.stationFolder;
-    console.log('[AddDocuments] ▶ showAddDocumentsDialog called');
-    console.log('[AddDocuments]    stationFolder       =', currentStationDetailData.stationFolder);
-    console.log('[AddDocuments]    using documentsRoot =', root);
     let subs = [];
     try {
       const entries = await window.electronAPI.listDocumentContents(root);
@@ -3731,7 +3708,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (err) {
       console.error('[AddDocuments] error listing subfolders:', err);
     }
-    console.log('[AddDocuments]    listDirectoryContents returned subs =', subs);
     const sel = box.querySelector('#existingDocFolderSelect');
     subs.forEach(name => {
       const o = document.createElement('option');
@@ -3749,7 +3725,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 5) Cancel
     box.querySelector('#cancelAddDocuments').onclick = () => {
-      console.log('[AddDocuments] Cancel clicked');
       overlay.remove();
     };
 
@@ -3767,7 +3742,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         dest = `${root}/${nm}`;
       }
-      console.log('[AddDocuments] destFolder =', dest);
       overlay.remove();
 
       // reuse file-picker but allow all documents
@@ -3798,54 +3772,88 @@ document.addEventListener('DOMContentLoaded', async () => {
     const container = detailSections.inspectionHistory;
     container.innerHTML = '';
 
-    // 1) List only top-level inspection folders
+    // 1) Gather the inspection folders
     const root = currentStationDetailData.stationFolder;
     let rawEntries = [];
     try {
       rawEntries = await window.electronAPI.listDirectoryContents(root);
     } catch (e) {
-      console.error('[Inspection] could not list directory:', e);
+      console.error('…could not list:', e);
     }
-
-    // 2) Keep only names like “YYYY…” or “YYYY-MM-DD…”
     const entries = rawEntries.filter(e =>
-      e.isDirectory && /inspection|assessment/i.test(e.name)
+      e.isDirectory && /\d{4}/.test(e.name)
     );
     if (entries.length === 0) {
       container.innerHTML = '<p>No inspection history found.</p>';
       return;
     }
 
-    // 3) Compute “Next Inspection Due”
     let nextDate = 'TBD';
-    const freq = currentStationDetailData.overview['Frequency'] || '';
-    if (freq) {
-      // sort descending by date
-      entries.sort((a,b) => {
-        const t = nm => {
+
+
+    // first look for the “Frequency” key (used by Repairs),
+    // then fall back to “Inspection Frequency”
+    // figure out which key actually holds the frequency
+    const freqKey = Object
+      .keys(currentStationDetailData.overview)
+      .find(k => /inspection frequency$/i.test(k));
+
+    // grab & trim it (or fall back to empty string)
+    const freqRaw = freqKey
+      ? String(currentStationDetailData.overview[freqKey]).trim()
+      : '';
+
+
+    // Parse “5years”, “5 Years”, “5 year”, etc.
+    const freqMatch = freqRaw.match(
+      /(\d+)\s*(year|years|month|months|week|weeks|day|days)/i
+    );
+
+
+    if (freqMatch) {
+      // sort descending, pick the latest inspection folder
+      entries.sort((a, b) => {
+        const dateFromName = nm => {
           const m = nm.match(/^(\d{4}(?:-\d{2}-\d{2})?)/);
           return m ? new Date(m[1]).getTime() : 0;
         };
-        return t(b.name) - t(a.name);
+        return dateFromName(b.name) - dateFromName(a.name);
       });
-      const m = entries[0].name.match(/^(\d{4}(?:-\d{2}-\d{2})?)/);
-      if (m) {
-        const d = new Date(m[1]);
-        const [nRaw, unit] = freq.split(' ');
-        const n = parseInt(nRaw,10) || 0;
-        if (n>0) {
-          switch(unit.toLowerCase()){
-            case 'days':   d.setDate(d.getDate()+n); break;
-            case 'weeks':  d.setDate(d.getDate()+7*n); break;
-            case 'months': d.setMonth(d.getMonth()+n); break;
-            case 'years':  d.setFullYear(d.getFullYear()+n); break;
-          }
-          nextDate = d.toISOString().slice(0,10);
+
+      const lastDateMatch = entries[0].name.match(
+        /^(\d{4}(?:-\d{2}-\d{2})?)/
+      );
+
+
+      if (lastDateMatch) {
+        const d = new Date(lastDateMatch[1]);
+        const n = parseInt(freqMatch[1], 10);
+        const unit = freqMatch[2].toLowerCase();
+        
+
+        switch (unit) {
+          case 'day':
+          case 'days':
+            d.setDate(d.getDate() + n);
+            break;
+          case 'week':
+          case 'weeks':
+            d.setDate(d.getDate() + 7 * n);
+            break;
+          case 'month':
+          case 'months':
+            d.setMonth(d.getMonth() + n);
+            break;
+          case 'year':
+          case 'years':
+            d.setFullYear(d.getFullYear() + n);
+            break;
         }
+        nextDate = d.toISOString().slice(0, 10);
       }
     }
 
-    // 4) Render Next-Due bar
+    // 3) Render the “Next Inspection Due” bar
     const dueDiv = document.createElement('div');
     dueDiv.classList.add('next-inspection');
     dueDiv.innerHTML = `
@@ -3854,10 +3862,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         <em>Next Inspection Due</em>
       </h4>
     `;
+    // ←–– re-add the “Add Inspection” button
     const addBtn = document.createElement('button');
     addBtn.textContent = '＋ Add Inspection';
     addBtn.style.marginLeft = '12px';
-    addBtn.onclick = () => showAddInspectionDialog(currentStationDetailData.stationId);
+    addBtn.addEventListener('click', () =>
+      showAddInspectionDialog(currentStationDetailData.stationId)
+    );
     dueDiv.appendChild(addBtn);
     container.appendChild(dueDiv);
 
@@ -3874,7 +3885,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 6) Process each inspection folder
     for (const ent of entries) {
-      console.log('[Inspection] ▶ Processing folder:', ent.path);
 
       // parse date & title
       const dm = ent.name.match(/^(\d{4}(?:-\d{2}-\d{2})?)(?:[_-]*(.*))?$/);
@@ -3892,7 +3902,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       let inspectorName   = '';
       try {
         const txt = await window.electronAPI.readTextFile(`${ent.path}/description.txt`);
-        console.log('[Inspection] raw description.txt:', txt);
         let section = null;
         for (let line of txt.split(/\r?\n/)) {
           line = line.trim();
@@ -3901,8 +3910,6 @@ document.addEventListener('DOMContentLoaded', async () => {
           if (section==='desc' && line)    descriptionText += (descriptionText?'\n':'')+line;
           if (section==='insp' && line)    inspectorName   = line;
         }
-        console.log('[Inspection] parsed description:', descriptionText);
-        console.log('[Inspection] parsed inspector:', inspectorName);
       } catch (e) {
         console.warn('[Inspection] could not read description.txt:', e);
       }
@@ -3973,6 +3980,26 @@ document.addEventListener('DOMContentLoaded', async () => {
             a.style.display = 'block';
             entryDiv.appendChild(a);
           });
+
+
+      // ————— Add a “Delete” button —————
+      const deleteBtn = document.createElement('button');
+      deleteBtn.textContent = 'Delete Inspection';
+      deleteBtn.classList.add('inspection-delete-btn');
+      deleteBtn.addEventListener('click', async () => {
+        if (!confirm(
+          `Are you sure you want to delete the entire inspection folder?\n\n${ent.path}\n\nThis cannot be undone.`
+        )) return;
+        try {
+          await window.electronAPI.deleteFolder(ent.path);
+          entryDiv.remove();
+          console.log('▶ Deleted inspection folder:', ent.path);
+        } catch (err) {
+          console.error('❌ Delete failed:', err);
+          alert('Failed to delete inspection:\n' + err.message);
+        }
+      });
+      entryDiv.appendChild(deleteBtn);
 
       container.appendChild(entryDiv);
     }
@@ -4273,7 +4300,6 @@ document.addEventListener('DOMContentLoaded', async () => {
           a.style.display = 'block';
           entryDiv.appendChild(a);
         });
-
       container.appendChild(entryDiv);
     }
   }

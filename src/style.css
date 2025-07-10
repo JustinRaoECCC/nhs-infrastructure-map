@@ -804,3 +804,16 @@ body, html {
 .docs-table a:hover {
   text-decoration: underline;
 }
+
+.delete-inspection-btn {
+  margin-left: 1em;
+  padding: 0.2em 0.5em;
+  background: #e74c3c;
+  color: white;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.delete-inspection-btn:hover {
+  opacity: 0.8;
+}

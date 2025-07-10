@@ -1681,6 +1681,23 @@ ipcMain.handle('get-file-stats', async (_evt, filePath) => {
   }
 });
 
+const rimraf = require('rimraf');
+
+ipcMain.handle('delete-folder', (event, folderPath) => {
+  return new Promise(resolve => {
+    rimraf(folderPath, err => {
+      if (err) {
+        console.error('rimraf failed:', err);
+        resolve({ success: false, message: err.message });
+      } else {
+        resolve({ success: true });
+      }
+    });
+  });
+});
+
+
+
 // ─── Electron Window Setup ──────────────────────────────────────────────────
 
 /**
