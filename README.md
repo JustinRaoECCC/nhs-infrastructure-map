@@ -138,32 +138,8 @@ nhs-infrastructure-map/
 ## Current Bugs / TODO List
 
 
-8. Be able to create a folder as an inspection (based off of the name convention) and be able to upload documents/photos to it
-  - First 6 photos displayed only
-  - Follow photo Khodi sent as a template
-  - Next inspection date is coming from inspection frequency
-(almost done)
-
-* Inspection Report PDF
-* + n more button smaller
-* Construction History isnt displaying the description
-
-
-9. Fix up documents tab
-10. "Enter" button works
-11. Display the Inactive Stations greyed out a bit maybe
-
-ADMIN CONTROl
-- Log in as Admin OR Log in as Guest
-- Admin login requires ECCC email, Password (hard coded in the backend)
-
-
-
 * Impliment the calculation for determining what should be the order of repairs (Sort by: Repair Priority) -->  Out of 100, it's somthing like x times 0.3 + y times 0.5 + z times 0.2
 
-Ask Khodi
-- Clarify how the Next Inspection Date is calculated (repair frequency, etc.)
-    - Currently choses the date based off the frequency of the repair with highest priority (if it is tied it chooses the oldest one (last added)
 
 
 ---
