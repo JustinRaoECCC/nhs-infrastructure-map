@@ -153,6 +153,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   let currentDocumentFolder = null;
   let loadedPhotoGroups  = null;
   let loadedDocumentGroups = null;
+  let loadedRootImages  = null;
 
   // Photos stuff
   // ────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -246,7 +247,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       hideLoadingMessage();
 
       // Re-group into top-level folders vs root images
-      const imageFiles = allItems.filter(i => !i.isDirectory);
+      
+      const imageFiles = allItems.filter(i =>
+        !i.isDirectory &&
+        /\.(jpe?g|png|gif|bmp)$/i.test(i.name)
+      );
+
       const newLoadedGroups = {};
       const rootImages = [];
       imageFiles.forEach(f => {
@@ -2366,103 +2372,120 @@ document.addEventListener('DOMContentLoaded', async () => {
     sectionElement.appendChild(ul);
   }
 
-  
   /**
    * Renders the “Photos” tab.
    * If currentPhotoFolder===null → shows folder cards.
    * Otherwise → shows image thumbnails in that folder + a back button.
    */
-  async function renderPhotosTab(items) {
+  async function renderPhotosTab() {
     const container = detailSections.photos;
     container.innerHTML = '';
+    // show loading overlay
+    showLoadingMessage('Loading photos…');
 
-    // 1) Always show the Add Photos button at top
-    const addBtn = document.createElement('button');
-    addBtn.id = 'btnAddPhotos';
-    addBtn.textContent = '+ Add Photos';
-    addBtn.style.display = 'block';
-    addBtn.style.margin = '12px 0';
-    addBtn.onclick = showAddPhotosDialog;
-    container.appendChild(addBtn);
-
-    // 2) If inside a folder, show Back button
-    if (currentPhotoFolder) {
-      const back = document.createElement('button');
-      back.textContent = '← Back to folders';
-      back.style.marginBottom = '12px';
-      back.onclick = () => {
-        currentPhotoFolder = null;
-        renderPhotosTab(items);
-      };
-      container.appendChild(back);
-    }
-
-    // 3) Top-level view: folder cards + any root-level images
-    if (!currentPhotoFolder) {
-      // Folder cards
-      const folders = items.filter(i => i.isDirectory);
-      if (folders.length) {
-        const grid = document.createElement('div');
-        grid.style = 'display:flex; flex-wrap:wrap; gap:16px;';
-        folders.forEach(f => {
-          const card = document.createElement('div');
-          card.style = 'border:1px solid #ccc; padding:12px; width:140px; text-align:center; cursor:pointer;';
-          card.innerHTML = `
-            <div style="font-size:2em;">📁</div>
-            <div style="margin-top:8px; word-break:break-word;">${f.name}</div>
-          `;
-          card.onclick = async () => {
-            currentPhotoFolder = f.path;
-            const sub = await window.electronAPI.listDirectoryContents(f.path);
-            renderPhotosTab(sub);
-          };
-          grid.appendChild(card);
-        });
-        container.appendChild(grid);
+    try {
+      // If we’re drilled into a sub-folder, show a Back button
+      if (currentPhotoFolder) {
+        const back = document.createElement('button');
+        back.textContent = '← Back to folders';
+        back.style.marginBottom = '12px';
+        back.onclick = () => {
+          currentPhotoFolder = null;
+          renderPhotosTab();
+        };
+        container.appendChild(back);
       }
 
-      // Root-level image thumbnails
-      const rootImages = items.filter(i => 
-        !i.isDirectory && 
-        // direct children: no extra slash after stationFolder
-        !/[\/\\]/.test(i.path.slice(currentStationDetailData.stationFolder.length + 1))
+      // ── Top-level view ─────────────────────────────────────────
+      if (!currentPhotoFolder) {
+        if (!loadedPhotoGroups) {
+          const allItems = await window.electronAPI.listDirectoryContentsRecursive(
+            currentStationDetailData.stationFolder
+          );
+
+          // filter to images
+          const imageFiles = allItems.filter(i =>
+            !i.isDirectory && /\.(jpe?g|png|gif|bmp)$/i.test(i.name)
+          );
+
+          // group by first folder vs root
+          loadedPhotoGroups = {};
+          loadedRootImages  = [];
+          imageFiles.forEach(f => {
+            const rel   = f.path.slice(currentStationDetailData.stationFolder.length + 1);
+            const parts = rel.split(/[/\\]/);
+            if (parts.length === 1) {
+              loadedRootImages.push(f);
+            } else {
+              const top = parts[0];
+              loadedPhotoGroups[top] = loadedPhotoGroups[top] || [];
+              loadedPhotoGroups[top].push(f);
+            }
+          });
+        }
+
+        // a) Render folder cards
+        renderPhotoGroups(loadedPhotoGroups);
+
+        // b) Render root-level images
+        if (loadedRootImages.length) {
+          const imgGrid = document.createElement('div');
+          imgGrid.style = 'display:flex; flex-wrap:wrap; gap:12px; margin-top:16px;';
+          loadedRootImages.forEach(imgItem => {
+            const thumb = document.createElement('img');
+            thumb.src           = `file://${imgItem.path}`;
+            thumb.alt           = imgItem.name;
+            thumb.title         = imgItem.name;
+            thumb.style = 'width:120px; height:120px; object-fit:cover; cursor:pointer;';
+            thumb.onclick = () => showImageOverlay(imgItem);
+            imgGrid.appendChild(thumb);
+          });
+          container.appendChild(imgGrid);
+        }
+
+        // c) + Add Photos button
+        let addBtn = container.querySelector('#btnAddPhotos');
+        if (addBtn) addBtn.remove();
+        addBtn = document.createElement('button');
+        addBtn.id          = 'btnAddPhotos';
+        addBtn.textContent = '+ Add Photos';
+        addBtn.style.margin = '12px 0';
+        addBtn.onclick     = showAddPhotosDialog;
+        container.appendChild(addBtn);
+
+        return;
+      }
+
+      // ── Inside a folder ────────────────────────────────────────
+      const allItems = await window.electronAPI.listDirectoryContentsRecursive(currentPhotoFolder);
+
+      // Only images in this folder
+      const images = allItems.filter(i =>
+        !i.isDirectory && /\.(jpe?g|png|gif|bmp)$/i.test(i.name)
       );
-      if (rootImages.length) {
+
+      if (images.length === 0) {
+        container.innerHTML += '<p>No images in this folder.</p>';
+      } else {
         const grid = document.createElement('div');
-        grid.style = 'display:flex; flex-wrap:wrap; gap:12px; margin-top:16px;';
-        rootImages.forEach(imgItem => {
+        grid.style = 'display:flex; flex-wrap:wrap; gap:12px;';
+        images.forEach(imgItem => {
           const thumb = document.createElement('img');
-          thumb.src = `file://${imgItem.path}`;
-          thumb.alt = imgItem.name;
-          thumb.title = imgItem.name;
+          thumb.src           = `file://${imgItem.path}`;
+          thumb.alt           = imgItem.name;
+          thumb.title         = imgItem.name;
           thumb.style = 'width:120px; height:120px; object-fit:cover; cursor:pointer;';
           thumb.onclick = () => showImageOverlay(imgItem);
           grid.appendChild(thumb);
         });
         container.appendChild(grid);
       }
-
-    } else {
-      // 4) Inside a folder: just thumbs
-      const images = items.filter(i => !i.isDirectory);
-      if (!images.length) {
-        container.innerHTML += '<p>No images in this folder.</p>';
-        return;
-      }
-      const grid = document.createElement('div');
-      grid.style = 'display:flex; flex-wrap:wrap; gap:12px;';
-      images.forEach(imgItem => {
-        const thumb = document.createElement('img');
-        thumb.src = `file://${imgItem.path}`;
-        thumb.alt = imgItem.name;
-        thumb.title = imgItem.name;
-        thumb.style = 'width:120px; height:120px; object-fit:cover; cursor:pointer;';
-        thumb.onclick = () => showImageOverlay(imgItem);
-        grid.appendChild(thumb);
-      });
-      container.appendChild(grid);
+    } finally {
+      // always hide loading overlay
+      hideLoadingMessage();
     }
   }
+
 
   /** 
    * Simple full-screen overlay to show one image.
@@ -2539,74 +2562,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             );
             break;
           case 'photos':
-            // On first entry, load & group all images by top-level folder,
-            // but also collect root-level images separately:
-            if (!loadedPhotoGroups) {
-              showLoadingMessage('Loading photos, please wait…');
-              const allItems = await window.electronAPI
-                .listDirectoryContentsRecursive(currentStationDetailData.stationFolder);
-              hideLoadingMessage();
-
-              // flatten to image files only
-              const imageFiles = allItems.filter(i => !i.isDirectory);
-
-              // group into sub-folders vs root images
-              loadedPhotoGroups = {};
-              const rootImages = [];
-              imageFiles.forEach(f => {
-                // relative path after stationFolder
-                const rel = f.path.slice(
-                  currentStationDetailData.stationFolder.length + 1
-                );
-                const parts = rel.split(/[/\\]/);
-                if (parts.length === 1) {
-                  // no slash ⇒ file in the root
-                  rootImages.push(f);
-                } else {
-                  // first segment is the sub-folder
-                  const top = parts[0] || '';
-                  if (!loadedPhotoGroups[top]) loadedPhotoGroups[top] = [];
-                  loadedPhotoGroups[top].push(f);
-                }
-              });
-
-              // 1) render folder cards
-              renderPhotoGroups(loadedPhotoGroups);
-
-              // 2) render root-level images (thumbnails) below folders
-              if (rootImages.length) {
-                const imgGrid = document.createElement('div');
-                imgGrid.style.display = 'flex';
-                imgGrid.style.flexWrap = 'wrap';
-                imgGrid.style.gap = '12px';
-                imgGrid.style.marginTop = '16px';
-                rootImages.forEach(imgItem => {
-                  const thumb = document.createElement('img');
-                  thumb.src = `file://${imgItem.path}`;
-                  thumb.alt = imgItem.name;
-                  thumb.title = imgItem.name;
-                  thumb.style.width = '120px';
-                  thumb.style.height = '120px';
-                  thumb.style.objectFit = 'cover';
-                  thumb.style.cursor = 'pointer';
-                  thumb.onclick = () => showImageOverlay(imgItem);
-                  imgGrid.appendChild(thumb);
-                });
-                detailSections.photos.appendChild(imgGrid);
-              }
-
-              // 3) “Add Photos” button at the end (always visible)
-              {
-                const old = detailSections.photos.querySelector('#btnAddPhotos');
-                if (old) old.remove();
-                const btn = document.createElement('button');
-                btn.id          = 'btnAddPhotos';
-                btn.textContent = '+ Add Photos';
-                btn.style.margin = '10px 0';
-                btn.onclick     = showAddPhotosDialog;
-                detailSections.photos.appendChild(btn);
-              }
-            }
+            await renderPhotosTab();
             break;
 
         }
@@ -4011,23 +3967,34 @@ document.addEventListener('DOMContentLoaded', async () => {
         const img = document.createElement('img');
         img.src = `file://${imgItem.path}`;
         img.title = imgItem.name;
-        img.onclick = ()=>{
+        img.addEventListener('click', async () => {
+          // 1) Drill into this inspection folder
           currentPhotoFolder = ent.path;
-          document.querySelector('.detail-nav-btn[data-section="photos"]').click();
-        };
+
+          // 2) Switch to the Photos tab
+          setActiveDetailSection('photos');
+
+          // 3) Re-render the Photos panel for the new folder
+          await renderPhotosTab(currentStationDetailData.photos);
+        });
         thumbRow.appendChild(img);
       });
       const totalImgs = allFiles.filter(f=>!f.isDirectory && /\.(jpe?g|png|gif|bmp)$/i.test(f.name)).length;
-      if (totalImgs>5) {
+      if (totalImgs > 5) {
         const more = document.createElement('button');
-        more.textContent = `+ ${totalImgs-5} more`;
-        more.onclick = ()=>{
-          currentPhotoFolder = ent.path;
-          document.querySelector('.detail-nav-btn[data-section="photos"]').click();
-        };
+        more.textContent = `+ ${totalImgs - 5} more`;
         more.classList.add('inspection-more');
+
+        // ← exactly the same async handler you use on the thumbnails
+        more.addEventListener('click', async () => {
+          currentPhotoFolder = ent.path;
+          setActiveDetailSection('photos');
+          await renderPhotosTab(currentStationDetailData.photos);
+        });
+
         thumbRow.appendChild(more);
       }
+
       entryDiv.appendChild(thumbRow);
 
       // any PDFs in that folder
@@ -4311,7 +4278,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     const container = detailSections.constructionHistory;
     container.innerHTML = '';
 
-    // 1) Read the station root folder
+    // ─── + Add Construction button (no-op for now) ───────────────────────────────
+    const addConstructionBtn = document.createElement('button');
+    addConstructionBtn.textContent = '＋ Add Construction';
+    addConstructionBtn.style.marginBottom = '12px';
+    // (you can wire up a handler here later)
+    container.appendChild(addConstructionBtn);
+
+    // 1) Read the station root folders
     const root = currentStationDetailData.stationFolder;
     let rawEntries = [];
     try {
@@ -4320,7 +4294,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       console.error('[Construction] could not list directory:', e);
     }
 
-    // 2) Filter OUT anything with “Inspection” or “Assessment” in the name
+    // 2) Filter OUT anything named like an inspection folder
     const entries = rawEntries.filter(e =>
       e.isDirectory && !/inspection|assessment/i.test(e.name)
     );
@@ -4339,33 +4313,29 @@ document.addEventListener('DOMContentLoaded', async () => {
       return parseDate(b.name) - parseDate(a.name);
     });
 
-    // 4) Render each entry exactly like your inspection entries,
-    //    but skip the “Next Due” bar and “+ Add” button part
+    // 4) Render each “construction” entry, mirroring your inspection UI
     for (const ent of entries) {
       // parse date & title from folder name
       const dm = ent.name.match(/^(\d{4}(?:-\d{2}-\d{2})?)(?:[_-]*(.*))?$/);
-      const datePart  = dm[1];
-      const rawTitle  = dm[2] || '';
+      // fallback to the folder name if it doesn’t start with YYYY
+      const datePart = dm ? dm[1] : ent.name;
+      const rawTitle = dm && dm[2] ? dm[2] : '';
       const titleText = rawTitle
         .replace(/[_-]+/g, ' ')
         .replace(/\b\w/g, c => c.toUpperCase())
         .trim() || 'Event';
 
       const entryDiv = document.createElement('div');
-      entryDiv.classList.add('inspection-entry');
+      entryDiv.classList.add('inspection-entry'); // reuse CSS
 
       // Header
       const h4 = document.createElement('h4');
       h4.textContent = `${datePart} – ${titleText}`;
       entryDiv.appendChild(h4);
 
-      // description.txt parsing (optional — copy from inspection renderer if you like)
-      // … you can duplicate your description.txt code here if needed …
-
       // Thumbnails (up to 5), same as inspection
       const thumbRow = document.createElement('div');
       thumbRow.classList.add('inspection-thumbs');
-
       let allFiles = [];
       try {
         allFiles = await window.electronAPI.listDirectoryContentsRecursive(ent.path);
@@ -4382,7 +4352,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         img.src = `file://${imgItem.path}`;
         img.title = imgItem.name;
         img.onclick = () => {
-          // mimic your inspection thumb clicks
           currentPhotoFolder = ent.path;
           document.querySelector('.detail-nav-btn[data-section="photos"]').click();
         };
@@ -4394,10 +4363,17 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (totalImgs > 5) {
         const more = document.createElement('button');
         more.textContent = `+ ${totalImgs - 5} more`;
-        more.onclick = () => {
+        more.classList.add('inspection-more');
+        more.addEventListener('click', async () => {
+          // 1) Drill into this inspection folder
           currentPhotoFolder = ent.path;
-          document.querySelector('.detail-nav-btn[data-section="photos"]').click();
-        };
+
+          // 2) Switch to the Photos tab
+          setActiveDetailSection('photos');
+
+          // 3) Re-render the Photos panel for the new folder
+          await renderPhotosTab();
+        });
         thumbRow.appendChild(more);
       }
 
@@ -4410,7 +4386,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       } catch (err) {
         console.warn('[Construction] could not list docs:', err);
       }
-
       docs
         .filter(f => !f.isDirectory && f.name.toLowerCase().endsWith('.pdf'))
         .forEach(p => {
@@ -4421,9 +4396,29 @@ document.addEventListener('DOMContentLoaded', async () => {
           a.style.display = 'block';
           entryDiv.appendChild(a);
         });
+
+      // ─── Delete Construction button ───────────────────────────────────────────
+      const deleteBtn = document.createElement('button');
+      deleteBtn.textContent = 'Delete Construction';
+      deleteBtn.classList.add('inspection-delete-btn');
+      deleteBtn.addEventListener('click', async () => {
+        if (!confirm(
+          `Are you sure you want to delete the entire construction folder?\n\n${ent.path}\n\nThis cannot be undone.`
+        )) return;
+        try {
+          await window.electronAPI.deleteFolder(ent.path);
+          entryDiv.remove();
+        } catch (err) {
+          console.error('❌ Delete failed:', err);
+          alert('Failed to delete construction:\n' + err.message);
+        }
+      });
+      entryDiv.appendChild(deleteBtn);
+
       container.appendChild(entryDiv);
     }
   }
+
 
 
 

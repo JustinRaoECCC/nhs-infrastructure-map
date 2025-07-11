@@ -818,3 +818,25 @@ body, html {
   opacity: 0.8;
 }
 
+.inspection-entry {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;        /* vertically center items on the same row */
+}
+
+.inspection-entry h4,
+.inspection-entry .inspection-summary,
+.inspection-entry .inspection-thumbs {
+  flex: 0 0 100%;              /* each of these spans the full width */
+}
+
+.inspection-entry .inspection-more,
+.inspection-entry .delete-inspection-btn {
+  flex: 0 0 auto;              /* size to content and sit side-by-side */
+  margin-right: 8px;           /* space between the two buttons */
+}
+
+/* reset the old left-margin on delete so it doesn’t misalign */
+.inspection-entry .delete-inspection-btn {
+  margin-left: 0;
+}
