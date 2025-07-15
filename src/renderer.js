@@ -4155,8 +4155,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         )) return;
         try {
           await window.electronAPI.deleteFolder(ent.path);
-          entryDiv.remove();
-          console.log('▶ Deleted inspection folder:', ent.path);
+          // Re-render the whole section so “Next Inspection Due” is recalculated instantly
+          await renderInspectionHistorySection();
         } catch (err) {
           console.error('❌ Delete failed:', err);
           alert('Failed to delete inspection:\n' + err.message);
