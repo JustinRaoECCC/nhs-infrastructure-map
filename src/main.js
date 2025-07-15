@@ -1500,10 +1500,11 @@ ipcMain.handle('get-station-repairs', async (_e, stationId) => {
     const row = ws.getRow(r);
     if (!row.hasValues) continue;
     repairs.push({
+      title:   row.getCell(hdrs['Repair Name']).value || '',
       ranking: parseInt(row.getCell(hdrs['Repair Ranking']).value, 10) || 0,
       cost:     parseFloat(row.getCell(hdrs['Repair Cost']).value)     || 0,
       freq:     row.getCell(hdrs['Frequency']).value                   || ''
-    });
+   });
   }
   return repairs;
 });
@@ -1512,18 +1513,22 @@ ipcMain.handle('get-station-repairs', async (_e, stationId) => {
  * IPC handler: add-station-repair
  *   Appends one repair to [stationId]_repairs.xlsx (creating it if necessary)
  */
-ipcMain.handle('add-station-repair', async (_e, stationId, { ranking, cost, freq }) => {
+ipcMain.handle('add-station-repair', async (_e, stationId, { title, ranking, cost, freq }) => {
   const file = path.join(REPAIRS_DIR, `${stationId}_repairs.xlsx`);
-  const wb = new ExcelJS.Workbook();
+  const wb   = new ExcelJS.Workbook();
   let ws;
+
   if (fs.existsSync(file)) {
     await wb.xlsx.readFile(file);
     ws = wb.worksheets[0];
   } else {
     ws = wb.addWorksheet('Repairs');
-    ws.addRow(['Repair Ranking','Repair Cost','Frequency']);
+    // include your new “Repair Name” column
+    ws.addRow(['Repair Name','Repair Ranking','Repair Cost','Frequency']);
   }
-  ws.addRow([ranking, cost, freq]);
+
+  // now you can safely write title into column A
+  ws.addRow([ title, ranking, cost, freq ]);
   await wb.xlsx.writeFile(file);
   return { success: true };
 });
@@ -1625,8 +1630,11 @@ ipcMain.handle('add-documents', async (_evt, destFolder, filePaths) => {
  *   photoPaths:Array<string>, reportPath:string,
  *   meta: { date, author, comment }
  */
-ipcMain.handle('add-inspection', async (_evt, stationId, folderName, photoPaths, reportPath, { date, author, comment }) => {
+ipcMain.handle('add-inspection', async (_evt, stationId, folderName, photoPaths, reportPath, meta, inspectionRepairs) => {
   try {
+    // 0)
+    const { date, author, comment } = meta;
+
     // 1) locate station base folder
     const entries = await fsPromises.readdir(BASE_STATIONS_PATH, { withFileTypes:true });
     const match = entries.find(d =>
@@ -1634,7 +1642,11 @@ ipcMain.handle('add-inspection', async (_evt, stationId, folderName, photoPaths,
     );
     if (!match) throw new Error('Station folder not found');
     const stationFolder = path.join(BASE_STATIONS_PATH, match.name);
+
+    // 2) make sure the inspection folder exists
     const inspRoot = path.join(stationFolder, folderName);
+    await fsPromises.mkdir(inspRoot, { recursive: true });
+    // 3) then photos sub-dir
     const photosDir = path.join(inspRoot, 'Photos');
 
     // 2) make dirs
@@ -1661,13 +1673,25 @@ ipcMain.handle('add-inspection', async (_evt, stationId, folderName, photoPaths,
       comment,
       '',
       'Inspector:',
-      author
+      author,
+      '',
+      'Date:',
+      date
     ];
     await fsPromises.writeFile(
       path.join(inspRoot, 'description.txt'),
       descLines.join('\n'),
       'utf8'
     );
+
+    // 7) persist inspection-specific repairs as JSON
+    const inspRepairsPath = path.join(inspRoot, 'inspectionRepairs.json');
+    await fsPromises.writeFile(
+      inspRepairsPath,
+      JSON.stringify(inspectionRepairs, null, 2),
+      'utf8'
+    );
+
 
     return { success: true };
   } catch (err) {
@@ -1703,6 +1727,15 @@ ipcMain.handle('delete-folder', (event, folderPath) => {
   });
 });
 
+// IPC: read a JSON file (for inspection repairs)
+ipcMain.handle('read-json-file', async (_evt, filePath) => {
+  try {
+    const txt = await fsPromises.readFile(filePath, 'utf8');
+    return JSON.parse(txt);
+  } catch {
+    return [];
+  }
+});
 
 
 // ─── Electron Window Setup ──────────────────────────────────────────────────

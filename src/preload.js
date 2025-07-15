@@ -95,7 +95,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   deleteStation: (stationId) => ipcRenderer.invoke('delete-station', stationId),
 
   // Add a new inspection folder + files
-  addInspection: (stationId, folderName, photos, report, meta) => ipcRenderer.invoke('add-inspection', stationId, folderName, photos, report, meta),
+  addInspection: (stationId, folderName, photos, report, meta, inspectionRepairs) => ipcRenderer.invoke('add-inspection', stationId, folderName, photos, report, meta, inspectionRepairs),
   readTextFile: (filePath) => ipcRenderer.invoke('read-text-file', filePath),
+  readJsonFile: (filePath) => ipcRenderer.invoke('read-json-file', filePath),
   deleteFolder: (path) => ipcRenderer.invoke('delete-folder', path),
+  
 });

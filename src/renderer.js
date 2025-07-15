@@ -1918,7 +1918,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         { fieldName: 'Repair Cost ($)',  fullKey: `repairs[${idx}].cost`,    value: r.cost,      readOnlyName: true },
         { fieldName: 'Frequency',        fullKey: `repairs[${idx}].freq`,    value: r.freq,      readOnlyName: true },
       ];
-      const block = createQuickSectionBlock(`Repair ${idx + 1}`, entries);
+      const block = createQuickSectionBlock(`Repair ${idx+1}`, entries);
+
 
       // remove the "+ Add Field" button inside this block
       block.querySelectorAll('button')
@@ -1926,6 +1927,20 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       // remove every little "×" delete‐field button
       block.querySelectorAll('.quick-field-row button').forEach(btn => btn.remove());
+
+      block.querySelectorAll('.quick-field-row').forEach(row => {
+        const label = row.children[0].value.trim();
+        if (label === 'Repair Cost ($)' || label === 'Repair Cost') {
+          const oldInput = row.children[1];
+         const numInput = document.createElement('input');
+          numInput.type       = 'number';
+          numInput.value      = oldInput.value || '';
+          numInput.style.flex = oldInput.style.flex;
+          numInput.style.minWidth = oldInput.style.minWidth;
+          numInput.placeholder   = 'e.g. 1200';
+          row.replaceChild(numInput, oldInput);
+        }
+      });
 
       // swap the Frequency text <input> for number + unit <select>
       block.querySelectorAll('.quick-field-row').forEach(row => {
@@ -1980,6 +1995,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
       });
 
+      block.querySelectorAll('.quick-field-row').forEach(row => {
+        const label = row.children[0].value.trim();
+        if (label === 'Repair Cost ($)' || label === 'Repair Cost') {
+         const oldInput = row.children[1];
+          const numInput = document.createElement('input');
+          numInput.type       = 'number';
+          numInput.value      = oldInput.value || '';
+          numInput.style.flex = oldInput.style.flex;
+          numInput.style.minWidth = oldInput.style.minWidth;
+          numInput.placeholder   = 'e.g. 1200';
+          row.replaceChild(numInput, oldInput);
+        }
+      });
+
       dynContainer.appendChild(block);
     });
 
@@ -1995,7 +2024,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         { fieldName: 'Frequency',        fullKey: `repairs[${idx}].freq`,    value: '', readOnlyName: true },
 
       ];
-      const block = createQuickSectionBlock(`Repair ${idx + 1}`, entries);
+      const block = createQuickSectionBlock(`Repair ${idx+1}`, entries);
 
       // remove "+ Add Field" and the little "×" buttons
       block.querySelectorAll('button')
@@ -2069,41 +2098,84 @@ document.addEventListener('DOMContentLoaded', async () => {
     saveBtn.style.marginTop = '10px';
 
     saveBtn.addEventListener('click', async () => {
-      // wipe out the old .xlsx first
+      // validation: make sure no empty titles, valid values
+      const blocks = dynContainer.querySelectorAll('.quick-section');
+      for (const block of blocks) {
+        const title = (block.dataset.sectionName || '').trim();
+        if (!title) {
+          showAlert('Repair name cannot be blank.');
+          return;
+        }
+        const rows = block.querySelectorAll('.quick-field-row');
+        let ranking, cost, freqRaw;
+        rows.forEach(row => {
+          const key = row.children[0].value.trim();
+          const val = row.children[1].value.trim();
+          if (key === 'Repair Ranking') ranking = parseInt(val,10) || '';
+          if (key.match(/Cost/i)) cost = val;
+          if (key === 'Frequency') freqRaw = row.children[1].value.trim();
+        });
+        // 1) ranking check
+        if (ranking !== '' && (ranking < 1 || ranking > 5)) {
+          showAlert('Repair Ranking must be between 1 and 5.');
+          return;
+        }
+        // 2) cost check
+        if (isNaN(parseFloat(cost))) {
+          showAlert('Repair Cost must be a valid number.');
+          return;
+        }
+        // 3) frequency check
+        if (freqRaw) {
+          const num = parseInt(freqRaw,10);
+          if (isNaN(num)) {
+            showAlert('Frequency must start with a valid number.');
+            return;
+          }
+        }
+      }
+      // passed all validation → proceed
+
       await window.electronAPI.deleteStationRepairs(stationId);
 
-      // then append each repair fresh
-      const blocks = dynContainer.querySelectorAll('.quick-section');
       for (let i = 0; i < blocks.length; i++) {
-          const rows = blocks[i].querySelectorAll('.quick-field-row');
-          const rep = { ranking: 0, cost: 0, freq: '' };
-          for (const row of rows) {
-            const key = row.children[0].value.trim();
-            const val = row.children[1].value.trim();
+        const block = blocks[i];
+        const title = block.dataset.sectionName;
+        const rows = block.querySelectorAll('.quick-field-row');
+        const rep = {
+          title,
+          ranking: 0,
+          cost: 0,
+          freq: ''
+        };
 
-            if (key === 'Repair Ranking') {
-              rep.ranking = parseInt(val, 10) || 0;
-            }
-            else if (key === 'Repair Cost ($)' || key === 'Repair Cost') {
-              const num = parseFloat(val);
-              if (isNaN(num)) {
-                showAlert('Repair Cost must be a valid number.');
-                return;  // abort save
-              }
-              rep.cost = num;
-            }
-            else if (key === 'Frequency') {
-              // ← replace your old single-line here with:
-              const numInput   = row.children[1];
-              const unitSelect = row.children[2];
-              const n = numInput.value.trim();
-              rep.freq = (n && unitSelect.value)
-                ? `${n} ${unitSelect.value}`
-                : '';
-            }
+        for (const row of rows) {
+          const key = row.children[0].value.trim();
+          const val = row.children[1].value.trim();
+
+          if (key === 'Repair Ranking') {
+            rep.ranking = parseInt(val, 10) || 0;
           }
-          await window.electronAPI.createNewRepair(stationId, rep);
+          else if (key === 'Repair Cost ($)' || key === 'Repair Cost') {
+            const num = parseFloat(val);
+            if (isNaN(num)) {
+              showAlert('Repair Cost must be a valid number.');
+              return;  // abort save
+            }
+            rep.cost = num;
+          }
+          else if (key === 'Frequency') {
+            // ← replace your old single-line here with:
+            const numInput   = row.children[1];
+            const unitSelect = row.children[2];
+            const n = numInput.value.trim();
+            rep.freq = (n && unitSelect.value)
+              ? `${n} ${unitSelect.value}`
+              : '';
+          }
         }
+        await window.electronAPI.createNewRepair(stationId, rep);
+      }
 
       // re-render so we never see duplicates
       await renderRepairsSection(container, stationId);
@@ -3963,22 +4035,17 @@ document.addEventListener('DOMContentLoaded', async () => {
       const imgs = allFiles
         .filter(f=>!f.isDirectory && /\.(jpe?g|png|gif|bmp)$/i.test(f.name))
         .slice(0,5);
-      imgs.forEach(imgItem=>{
+      imgs.forEach(imgItem => {
         const img = document.createElement('img');
-        img.src = `file://${imgItem.path}`;
+        img.src   = `file://${imgItem.path}`;
         img.title = imgItem.name;
-        img.addEventListener('click', async () => {
-          // 1) Drill into this inspection folder
-          currentPhotoFolder = ent.path;
-
-          // 2) Switch to the Photos tab
-          setActiveDetailSection('photos');
-
-          // 3) Re-render the Photos panel for the new folder
-          await renderPhotosTab(currentStationDetailData.photos);
+        img.style.cursor = 'pointer';
+        img.addEventListener('click', () => {
+          showImageOverlay(imgItem);
         });
         thumbRow.appendChild(img);
       });
+
       const totalImgs = allFiles.filter(f=>!f.isDirectory && /\.(jpe?g|png|gif|bmp)$/i.test(f.name)).length;
       if (totalImgs > 5) {
         const more = document.createElement('button');
@@ -3996,6 +4063,48 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
 
       entryDiv.appendChild(thumbRow);
+
+      // ─── INJECT inspection-specific repairs if present ──────────────────
+      try {
+        const jsonTxt = await window.electronAPI.readTextFile(
+          `${ent.path}/inspectionRepairs.json`
+       );
+        const inspReps = JSON.parse(jsonTxt);
+        if (inspReps.length) {
+         const repDiv = document.createElement('div');
+          repDiv.classList.add('inspection-repairs');
+
+          inspReps.forEach((r, idx) => {
+            // label outside the pill
+            const label = document.createElement('span');
+            label.classList.add('repair-label');
+            label.textContent = `${r.title}: `;
+            repDiv.appendChild(label);
+
+            // colored pill with only the data fields
+            const pill = document.createElement('div');
+            pill.classList.add('repair-pill');
+            const color = PRIORITY_COLORS[String(r.ranking)] || 'grey';
+            pill.style.backgroundColor = color;
+            pill.innerHTML = `
+              Priority: ${r.ranking}
+              &nbsp; Cost: $${r.cost}
+              &nbsp; Frequency: ${r.freq}
+            `;
+            repDiv.appendChild(pill);
+
+            // line‑break so multiple repairs stack
+            repDiv.appendChild(document.createElement('br'));
+          });
+
+          entryDiv.appendChild(repDiv);
+        }
+      } catch {
+        // no inspectionRepairs.json → nothing to do
+      }
+
+
+
 
       // any PDFs in that folder
       let docs = [];
@@ -4118,7 +4227,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         <label style="display:block; margin-bottom:12px;">
           Site Name:
           <input type="text" id="inspName"
-                placeholder="e.g. Cableway Engineering"
+                placeholder="e.g. Cableway Engineering Inspection"
                 style="width:100%; margin-top:4px; padding:6px; font-size:1rem;"/>
         </label>
         <label style="display:block; margin-bottom:12px;">
@@ -4149,6 +4258,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         </div>
       </div>
 
+      <div id="inspectionRepairsSection" style="margin-top:12px;margin-bottom:8px;">
+        <button type="button" id="addInspectionRepair">+ Add Repair</button>
+        <div id="inspectionRepairBlocks" style="margin-top:8px;"></div>
+      </div>
+
       <div style="text-align:right; margin-top:16px;">
         <button type="button" id="cancelInsp"
                 style="padding:8px 16px; font-size:1rem; margin-right:8px;">
@@ -4160,6 +4274,58 @@ document.addEventListener('DOMContentLoaded', async () => {
         </button>
       </div>
     `;
+
+    // wire up the “+ Add Repair” button
+    const repairBlocksContainer = box.querySelector('#inspectionRepairBlocks');
+    box.querySelector('#addInspectionRepair').addEventListener('click', () => {
+      const idx = repairBlocksContainer.children.length;
+      // exactly the same fields as in High-Priority Repairs…
+      const entries = [
+        { fieldName: 'Repair Ranking', fullKey: `inspectionRepairs[${idx}].ranking`, value: '', readOnlyName: true },
+        { fieldName: 'Repair Cost ($)', fullKey: `inspectionRepairs[${idx}].cost`,    value: '', readOnlyName: true },
+        { fieldName: 'Frequency',           fullKey: `inspectionRepairs[${idx}].freq`,    value: '', readOnlyName: true },
+      ];
+      const block = createQuickSectionBlock(`Repair ${idx+1}`, entries);
+      block.classList.add('inspection-repair-block');
+      // remove the auto-add/close buttons
+      block.querySelectorAll('button').forEach(b => {
+        if (b.textContent.trim()==='+ Add Field' || b.textContent.trim()==='×') b.remove();
+      });
+      // transform the Frequency row → number + unit dropdown
+      block.querySelectorAll('.quick-field-row').forEach(row => {
+        const label = row.children[0].value.trim();
+        if (label==='Frequency') {
+          const oldInp = row.children[1];
+          const [numVal,unitVal] = (oldInp.value||'').split(' ');
+          const num = document.createElement('input');
+          num.type='number'; num.value=numVal||''; 
+          // copy inline styles safely
+          num.style.cssText = oldInp.style.cssText;
+          const sel = document.createElement('select');
+          sel.style.marginLeft = oldInp.style.marginLeft;
+          ['days','weeks','months','years'].forEach(u=>{
+            const o=document.createElement('option'); o.value=u; o.textContent=u;
+            if(u===unitVal) o.selected=true; sel.appendChild(o);
+          });
+          row.replaceChild(num, oldInp);
+          row.appendChild(sel);
+        }
+        if (label==='Repair Ranking') {
+        const oldInp = row.children[1];
+        const sel = document.createElement('select');
+        // copy inline styles safely
+        sel.style.cssText = oldInp.style.cssText;
+          ['','1','2','3','4','5'].forEach(v=>{
+            const o=document.createElement('option'); o.value=v; o.textContent=v||'--';
+            sel.appendChild(o);
+          });
+          sel.addEventListener('change',()=>oldInp.value=sel.value);
+        row.replaceChild(sel, oldInp);
+        }
+      });
+      repairBlocksContainer.appendChild(block);
+    });
+
     overlay.appendChild(box);
 
     function inspKeyHandler(e) {
@@ -4176,8 +4342,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 
     // 3) State
-    let photoPaths = [];
-    let reportPaths = [];
+    let photoPaths = [], reportPaths = [], inspectionRepairs = [];
 
     // 4) Helpers to render lists
     const photoListDiv  = box.querySelector('#photoList');
@@ -4259,18 +4424,117 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
 
       const folderName = `${date}_${name.replace(/\s+/g, '_')}`;
-      const reportArg = reportPaths[0] || '';
+      const reportPath = reportPaths[0] || '';
+      const meta = { date, name, author, comment };
+
+      // ─── VALIDATE inspection‑specific repairs ───────────────────────────
+      const repairBlocks = box.querySelectorAll('.inspection-repair-block');
+      for (const [i, block] of Array.from(repairBlocks).entries()) {
+        // 1) Name cannot be blank
+        const title = (block.dataset.sectionName || '').trim() || `Repair ${i+1}`;
+        if (!title) {
+          showAlert(`Inspection Repair #${i+1}: name cannot be blank.`);
+          return;
+        }
+
+        // 2) Ranking must be 1–5 or blank
+        const rankSelect = block.querySelector('select');
+        const rank = rankSelect ? parseInt(rankSelect.value, 10) : NaN;
+        if (!isNaN(rank) && (rank < 1 || rank > 5)) {
+          showAlert(`Inspection Repair #${i+1}: ranking must be between 1 and 5.`);
+          return;
+        }
+
+        // 3) Cost must be a valid number
+        const costInput = block.querySelectorAll('input')[1];
+        const costRaw   = costInput ? costInput.value.trim() : '';
+        if (!costRaw || isNaN(parseFloat(costRaw))) {
+          showAlert(`Inspection Repair #${i+1}: cost must be a valid number.`);
+          return;
+        }
+
+        // 4) Frequency’s number part must be numeric
+        const freqInput = block.querySelector('input[type="number"]');
+        const freqNum   = freqInput ? parseInt(freqInput.value, 10) : NaN;
+        if (!freqNum || isNaN(freqNum)) {
+          showAlert(`Inspection Repair #${i+1}: frequency must start with a valid number.`);
+          return;
+        }
+      }
+      // ────────────────────────────────────────────────────────────────────
+     
+      // collect all “inspectionRepairs” blocks into a simple array
+      box.querySelectorAll('.inspection-repair-block').forEach((block, i) => {
+        const sectionTitle = block.dataset.sectionName || `Repair ${i+1}`;
+        const rows = block.querySelectorAll('.quick-field-row');
+        // 1) Ranking is in row 0, rendered as a <select>
+        const selRank = rows[0].querySelector('select');
+
+        // 2) Cost is in row 1, the *second* <input> (the first is the label)
+        const costRow  = rows[1];
+        const costInp  = costRow.querySelectorAll('input')[1];
+        const costRaw  = costInp.value.trim();
+        if (!costRaw || isNaN(parseFloat(costRaw))) {
+          showAlert(`Repair #${i+1}: cost must be a valid number.`);
+          throw new Error('abort save due to invalid cost');
+        }
+
+        // 3) Frequency is in row 2: number input + unit <select>
+        const freqRow = rows[2];
+        const numInp  = freqRow.querySelector('input[type="number"]');
+        const unitSel = freqRow.querySelector('select');
+        const numVal  = numInp.value.trim();
+       if (!numVal || isNaN(parseInt(numVal,10))) {
+          showAlert(`Repair #${i+1}: frequency must be a valid number.`);
+          throw new Error('abort save due to invalid frequency');
+       }
+
+      inspectionRepairs.push({
+        title:   sectionTitle,
+        ranking: parseInt(selRank.value, 10) || 0,
+        cost:    parseFloat(costRaw),
+        freq:    `${numVal} ${unitSel.value}`
+      });
+
+      });
+
+
+
       await window.electronAPI.addInspection(
         stationId,
         folderName,
         photoPaths,
-        reportArg,     // now passing an array of PDFs
-        { date, author, comment }
+        reportPath,
+        meta,
+        inspectionRepairs
       );
+
+
+      for (const rep of inspectionRepairs) {
+        await window.electronAPI.createNewRepair(stationId, {
+          ranking: rep.ranking,
+          cost:    rep.cost,
+          freq:    rep.freq
+        });
+      }
+
+      // Refresh the “High Priority Repairs” tab so the additions show up immediately
+      await renderRepairsSection(
+        detailSections.highPriorityRepairs,
+        stationId
+      );
+      updateActiveViewDisplay();
 
       overlay.removeEventListener('keydown', inspKeyHandler);
       overlay.remove();
-      await renderInspectionHistorySection();
+      await renderInspectionHistorySection(
+        detailSections.inspectionHistory, stationId
+      );
+      // also refresh the High-Priority Repairs tab if it’s open:
+      await renderRepairsSection(
+        detailSections.highPriorityRepairs, stationId
+      );
+
     });
   }
 
@@ -4323,7 +4587,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const titleText = rawTitle
         .replace(/[_-]+/g, ' ')
         .replace(/\b\w/g, c => c.toUpperCase())
-        .trim() || 'Event';
+        .trim() || ' ';
 
       const entryDiv = document.createElement('div');
       entryDiv.classList.add('inspection-entry'); // reuse CSS
@@ -4349,14 +4613,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       imgs.forEach(imgItem => {
         const img = document.createElement('img');
-        img.src = `file://${imgItem.path}`;
+        img.src   = `file://${imgItem.path}`;
         img.title = imgItem.name;
-        img.onclick = () => {
-          currentPhotoFolder = ent.path;
-          document.querySelector('.detail-nav-btn[data-section="photos"]').click();
-        };
+        img.style.cursor = 'pointer';
+        img.addEventListener('click', () => {
+          showImageOverlay(imgItem);
+        });
         thumbRow.appendChild(img);
       });
+
 
       // “+ N more” if there are more than 5
       const totalImgs = allFiles.filter(f => !f.isDirectory && /\.(jpe?g|png|gif|bmp)$/i.test(f.name)).length;

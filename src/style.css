@@ -819,9 +819,7 @@ body, html {
 }
 
 .inspection-entry {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;        /* vertically center items on the same row */
+  display: block;
 }
 
 .inspection-entry h4,
@@ -840,3 +838,61 @@ body, html {
 .inspection-entry .delete-inspection-btn {
   margin-left: 0;
 }
+
+/* 1) Ensure the Repairs box always sits on its own row */
+.inspection-entry .inspection-repairs {
+  clear: both;
+  margin-bottom: 8px;
+}
+
+/* 2) Force every button in an inspection-entry to be block-level and drop below */
+.inspection-entry > button {
+  display: block !important;
+  clear: both !important;
+  margin: 8px 0 0;
+}
+
+.inspection-repairs {
+  display: block;
+  clear: both;
+  margin-bottom: 8px;
+  display: block;
+  clear: both;
+  margin-bottom: 12px;
+  padding: 8px;
+  background: #f9f9f9;
+  border-radius: 4px;
+  border-left: 4px solid #ccc;
+}
+
+
+/* style each repair‐pill as an oval with white text */
+.repair-pill {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 4px 10px;
+  margin-bottom: 4px;
+  color: white;
+  font-size: 0.9em;
+  line-height: 1.2;
+  vertical-align: middle;
+}
+
+/* bold label, small right‑margin */
+.repair-label {
+  font-weight: bold;
+  margin-right: 6px;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+
+/* match your PALETTE ordering: */
+.inspection-repairs .ranking-1 { background: red; }
+.inspection-repairs .ranking-2 { background: orange; }
+.inspection-repairs .ranking-3 { background: yellow; color: #333; }
+.inspection-repairs .ranking-4 { background: green; }
+.inspection-repairs .ranking-5 { background: blue; }
+.inspection-repairs .ranking-0,
+.inspection-repairs .ranking- { background: grey; }
+
