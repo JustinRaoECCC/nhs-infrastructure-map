@@ -1673,10 +1673,7 @@ ipcMain.handle('add-inspection', async (_evt, stationId, folderName, photoPaths,
       comment,
       '',
       'Inspector:',
-      author,
-      '',
-      'Date:',
-      date
+      author
     ];
     await fsPromises.writeFile(
       path.join(inspRoot, 'description.txt'),
