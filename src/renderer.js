@@ -1918,8 +1918,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         { fieldName: 'Repair Cost ($)',  fullKey: `repairs[${idx}].cost`,    value: r.cost,      readOnlyName: true },
         { fieldName: 'Frequency',        fullKey: `repairs[${idx}].freq`,    value: r.freq,      readOnlyName: true },
       ];
-      const block = createQuickSectionBlock(`Repair ${idx+1}`, entries);
-
+      const block = createQuickSectionBlock(r.title || '', entries);
+      block.dataset.inspectionDate = r.inspectionDate || '';
+      block.dataset.inspectionName = r.inspectionName || '';
 
       // remove the "+ Add Field" button inside this block
       block.querySelectorAll('button')
@@ -2024,7 +2025,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         { fieldName: 'Frequency',        fullKey: `repairs[${idx}].freq`,    value: '', readOnlyName: true },
 
       ];
-      const block = createQuickSectionBlock(`Repair ${idx+1}`, entries);
+      const block = createQuickSectionBlock('', entries);
 
       // remove "+ Add Field" and the little "×" buttons
       block.querySelectorAll('button')
@@ -2098,55 +2099,81 @@ document.addEventListener('DOMContentLoaded', async () => {
     saveBtn.style.marginTop = '10px';
 
     saveBtn.addEventListener('click', async () => {
-      // validation: make sure no empty titles, valid values
       const blocks = dynContainer.querySelectorAll('.quick-section');
+
+      // 1) No blank titles
       for (const block of blocks) {
         const title = (block.dataset.sectionName || '').trim();
         if (!title) {
           showAlert('Repair name cannot be blank.');
           return;
         }
+      }
+
+      // 2) No duplicate titles
+      const titles = Array.from(blocks).map(b => b.dataset.sectionName.trim());
+      if (new Set(titles).size !== titles.length) {
+        showAlert('Repair names must be unique.');
+        return;
+      }
+
+      // 3) Per-block ranking / cost / frequency validation
+      for (const block of blocks) {
         const rows = block.querySelectorAll('.quick-field-row');
         let ranking, cost, freqRaw;
+
         rows.forEach(row => {
           const key = row.children[0].value.trim();
           const val = row.children[1].value.trim();
-          if (key === 'Repair Ranking') ranking = parseInt(val,10) || '';
-          if (key.match(/Cost/i)) cost = val;
-          if (key === 'Frequency') freqRaw = row.children[1].value.trim();
+
+          if (key === 'Repair Ranking') {
+            ranking = parseInt(val, 10) || '';
+          }
+          if (key.match(/Cost/i)) {
+            cost = val;
+          }
+          if (key === 'Frequency') {
+            freqRaw = val;
+          }
         });
-        // 1) ranking check
+
+        // 3a) ranking check
         if (ranking !== '' && (ranking < 1 || ranking > 5)) {
           showAlert('Repair Ranking must be between 1 and 5.');
           return;
         }
-        // 2) cost check
+
+        // 3b) cost check
         if (isNaN(parseFloat(cost))) {
           showAlert('Repair Cost must be a valid number.');
           return;
         }
-        // 3) frequency check
+
+        // 3c) frequency check
         if (freqRaw) {
-          const num = parseInt(freqRaw,10);
+          const num = parseInt(freqRaw, 10);
           if (isNaN(num)) {
             showAlert('Frequency must start with a valid number.');
             return;
           }
         }
       }
-      // passed all validation → proceed
 
+      // passed all validation → proceed
       await window.electronAPI.deleteStationRepairs(stationId);
 
+      // 4) Create new repairs
       for (let i = 0; i < blocks.length; i++) {
         const block = blocks[i];
-        const title = block.dataset.sectionName;
+        const title = block.dataset.sectionName.trim();
         const rows = block.querySelectorAll('.quick-field-row');
         const rep = {
           title,
           ranking: 0,
           cost: 0,
-          freq: ''
+          freq: '',
+          inspectionDate: block.dataset.inspectionDate || '',
+          inspectionName: block.dataset.inspectionName || ''
         };
 
         for (const row of rows) {
@@ -2165,7 +2192,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             rep.cost = num;
           }
           else if (key === 'Frequency') {
-            // ← replace your old single-line here with:
             const numInput   = row.children[1];
             const unitSelect = row.children[2];
             const n = numInput.value.trim();
@@ -2174,13 +2200,14 @@ document.addEventListener('DOMContentLoaded', async () => {
               : '';
           }
         }
+
         await window.electronAPI.createNewRepair(stationId, rep);
       }
 
-      // re-render so we never see duplicates
+      // 5) Re-render and refresh
       await renderRepairsSection(container, stationId);
-      await loadDataAndInitialize();      // reloads allStationData
-      updateActiveViewDisplay();         // re-paints map, list or priority view
+      await loadDataAndInitialize();
+      updateActiveViewDisplay();
 
       try {
         const allStations = await window.electronAPI.getStationData();
@@ -2196,22 +2223,21 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (activeTab === 'inspectionHistory') {
         await renderInspectionHistorySection();
       }
-      
-      // 5) refresh the quick‐view panel if it’s open on this station
-      if (currentEditingStation && currentEditingStation.stationId === stationId) {
+
+      // 6) Refresh quick-view panel if open
+      if (currentEditingStation?.stationId === stationId) {
         displayStationDetailsQuickView(
           allStationData.find(s => s.stationId === stationId)
         );
       }
 
-      // show a little green “saved” note
+      // 7) Show “saved” confirmation
       const saveMsg = document.getElementById('saveRepairsMessage');
-      saveMsg.textContent   = 'Repairs saved!';
-      saveMsg.style.color   = '#28a745';
-      // clear it after 2s
+      saveMsg.textContent = 'Repairs saved!';
+      saveMsg.style.color = '#28a745';
       setTimeout(() => saveMsg.textContent = '', 2000);
-
     });
+
     container.appendChild(saveBtn)
 
     // Saved messagae
@@ -4064,47 +4090,39 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       entryDiv.appendChild(thumbRow);
 
-      // ─── INJECT inspection-specific repairs if present ──────────────────
-      try {
-        const jsonTxt = await window.electronAPI.readTextFile(
-          `${ent.path}/inspectionRepairs.json`
-       );
-        const inspReps = JSON.parse(jsonTxt);
-        if (inspReps.length) {
-         const repDiv = document.createElement('div');
-          repDiv.classList.add('inspection-repairs');
+      // ─── INJECT inspection‐specific repairs via Excel ──────────────────
+      const allReps = await window.electronAPI.getStationRepairs(currentStationDetailData.stationId);
+      // filter those whose Inspection Date & Name match this folder
+      const inspReps = allReps.filter(r =>
+        r.inspectionDate === datePart &&
+        r.inspectionName === actionPart
+      );
+      if (inspReps.length) {
+        const repDiv = document.createElement('div');
+        repDiv.classList.add('inspection-repairs');
+        inspReps.forEach(r => {
+          const label = document.createElement('span');
+          label.classList.add('repair-label');
+          label.textContent = `${r.title}: `;
+          repDiv.appendChild(label);
 
-          inspReps.forEach((r, idx) => {
-            // label outside the pill
-            const label = document.createElement('span');
-            label.classList.add('repair-label');
-            label.textContent = `${r.title}: `;
-            repDiv.appendChild(label);
+          const pill = document.createElement('div');
+          pill.classList.add('repair-pill');
+          const color = PRIORITY_COLORS[String(r.ranking)] || 'grey';
+          pill.style.backgroundColor = color;
+          // use black text on lighter backgrounds (orange & yellow), otherwise white
+          pill.style.color = (color === 'orange' || color === 'yellow') ? 'black' : 'white';
 
-            // colored pill with only the data fields
-            const pill = document.createElement('div');
-            pill.classList.add('repair-pill');
-            const color = PRIORITY_COLORS[String(r.ranking)] || 'grey';
-            pill.style.backgroundColor = color;
-            pill.innerHTML = `
-              Priority: ${r.ranking}
-              &nbsp; Cost: $${r.cost}
-              &nbsp; Frequency: ${r.freq}
-            `;
-            repDiv.appendChild(pill);
-
-            // line‑break so multiple repairs stack
-            repDiv.appendChild(document.createElement('br'));
-          });
-
-          entryDiv.appendChild(repDiv);
-        }
-      } catch {
-        // no inspectionRepairs.json → nothing to do
+          pill.innerHTML = `
+            Priority: ${r.ranking}
+            &nbsp; Cost: $${r.cost}
+            &nbsp; Frequency: ${r.freq}
+          `;
+          repDiv.appendChild(pill);
+          repDiv.appendChild(document.createElement('br'));
+        });
+        entryDiv.appendChild(repDiv);
       }
-
-
-
 
       // any PDFs in that folder
       let docs = [];
@@ -4446,7 +4464,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         // 3) Cost must be a valid number
-        const costInput = block.querySelectorAll('input')[1];
+        const costInput = block.querySelector('input[type="number"]');
         const costRaw   = costInput ? costInput.value.trim() : '';
         if (!costRaw || isNaN(parseFloat(costRaw))) {
           showAlert(`Inspection Repair #${i+1}: cost must be a valid number.`);
@@ -4512,11 +4530,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       for (const rep of inspectionRepairs) {
         await window.electronAPI.createNewRepair(stationId, {
-          ranking: rep.ranking,
-          cost:    rep.cost,
-          freq:    rep.freq
+          title:           rep.title,
+          ranking:         rep.ranking,
+          cost:            rep.cost,
+          freq:            rep.freq,
+          inspectionDate:  date,  // from `const date = …`
+          inspectionName:  name   // from `const name = …`
         });
       }
+
 
       // Refresh the “High Priority Repairs” tab so the additions show up immediately
       await renderRepairsSection(

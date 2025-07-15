@@ -1487,33 +1487,53 @@ if (!fs.existsSync(REPAIRS_DIR)) {
 ipcMain.handle('get-station-repairs', async (_e, stationId) => {
   const file = path.join(REPAIRS_DIR, `${stationId}_repairs.xlsx`);
   if (!fs.existsSync(file)) return [];
+
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.readFile(file);
   const ws = wb.worksheets[0];
-  const repairs = [];
-  // assume headers are in row 1:
+
+  // build a map of header name → column index
   const hdrs = {};
   ws.getRow(1).eachCell((cell, idx) => {
-    hdrs[cell.value] = idx;
+    const v = cell.value ? String(cell.value).trim() : '';
+    if (v) hdrs[v] = idx;
   });
+
+  // helper: safely grab a cell by header name, or '' if missing
+  const getSafe = (row, name) => {
+    const col = hdrs[name];
+    return col ? row.getCell(col).value || '' : '';
+  };
+
+  const repairs = [];
   for (let r = 2; r <= ws.rowCount; r++) {
     const row = ws.getRow(r);
     if (!row.hasValues) continue;
     repairs.push({
-      title:   row.getCell(hdrs['Repair Name']).value || '',
-      ranking: parseInt(row.getCell(hdrs['Repair Ranking']).value, 10) || 0,
-      cost:     parseFloat(row.getCell(hdrs['Repair Cost']).value)     || 0,
-      freq:     row.getCell(hdrs['Frequency']).value                   || ''
-   });
+      title:           getSafe(row, 'Repair Name'),
+      ranking:         parseInt(getSafe(row, 'Repair Ranking'), 10) || 0,
+      cost:            parseFloat(getSafe(row, 'Repair Cost'))       || 0,
+      freq:            getSafe(row, 'Frequency'),
+      inspectionDate:  getSafe(row, 'Inspection Date'),
+      inspectionName:  getSafe(row, 'Inspection Name')
+    });
   }
   return repairs;
 });
+
 
 /**
  * IPC handler: add-station-repair
  *   Appends one repair to [stationId]_repairs.xlsx (creating it if necessary)
  */
-ipcMain.handle('add-station-repair', async (_e, stationId, { title, ranking, cost, freq }) => {
+ipcMain.handle('add-station-repair', async (_e, stationId, {
+  title,
+  ranking,
+  cost,
+  freq,
+  inspectionDate,
+  inspectionName
+}) => {
   const file = path.join(REPAIRS_DIR, `${stationId}_repairs.xlsx`);
   const wb   = new ExcelJS.Workbook();
   let ws;
@@ -1521,14 +1541,48 @@ ipcMain.handle('add-station-repair', async (_e, stationId, { title, ranking, cos
   if (fs.existsSync(file)) {
     await wb.xlsx.readFile(file);
     ws = wb.worksheets[0];
+
+    // 1) Make sure header row has all six columns
+    const required = [
+      'Repair Name',
+      'Repair Ranking',
+      'Repair Cost',
+      'Frequency',
+      'Inspection Date',
+      'Inspection Name'
+    ];
+    const header = ws.getRow(1);
+    required.forEach((h, i) => {
+      const cell = header.getCell(i + 1);
+      if (cell.value !== h) {
+        cell.value = h;
+        cell.font  = { bold: true };
+      }
+    });
+    header.commit();
   } else {
+    // first‐time: create the sheet with all six headers
     ws = wb.addWorksheet('Repairs');
-    // include your new “Repair Name” column
-    ws.addRow(['Repair Name','Repair Ranking','Repair Cost','Frequency']);
+    ws.addRow([
+      'Repair Name',
+      'Repair Ranking',
+      'Repair Cost',
+      'Frequency',
+      'Inspection Date',
+      'Inspection Name'
+    ]);
   }
 
-  // now you can safely write title into column A
-  ws.addRow([ title, ranking, cost, freq ]);
+  // 2) Append the new repair row, with real date & name
+  ws.addRow([
+    title,
+    ranking,
+    cost,
+    freq,
+    inspectionDate || '',
+    inspectionName || ''
+  ]);
+
   await wb.xlsx.writeFile(file);
   return { success: true };
 });
@@ -1682,12 +1736,21 @@ ipcMain.handle('add-inspection', async (_evt, stationId, folderName, photoPaths,
     );
 
     // 7) persist inspection-specific repairs as JSON
-    const inspRepairsPath = path.join(inspRoot, 'inspectionRepairs.json');
-    await fsPromises.writeFile(
-      inspRepairsPath,
-      JSON.stringify(inspectionRepairs, null, 2),
-      'utf8'
-    );
+    for (const rep of inspectionRepairs) {
+      // call your existing “add-station-repair” handler
+      await exports.addStationRepair(
+        stationId,
+        {
+          title:          rep.title,
+          ranking:        rep.ranking,
+          cost:           rep.cost,
+          freq:           rep.freq,
+          inspectionDate: date,
+          inspectionName: name
+        }
+      );
+    }
+
 
 
     return { success: true };
