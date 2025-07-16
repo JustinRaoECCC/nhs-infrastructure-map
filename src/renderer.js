@@ -4343,6 +4343,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
       });
       repairBlocksContainer.appendChild(block);
+
+      // ─── OVERRIDE “Delete Repair” INSIDE THE INSPECTION DIALOG ───────────────
+      // we only want to remove the block, not show a save‐message
+      const delBtn = Array.from(block.querySelectorAll('button'))
+                          .find(b => b.textContent.trim() === 'Delete Repair');
+      if (delBtn) {
+        // replace it with a fresh button so its old handler is gone
+        const clean = delBtn.cloneNode(true);
+        delBtn.replaceWith(clean);
+        clean.addEventListener('click', () => {
+          block.remove();
+        });
+      }
+      
     });
 
     overlay.appendChild(box);
