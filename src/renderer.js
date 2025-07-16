@@ -1858,7 +1858,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
 
-
   function closeStationDetailPage() {
     loadedPhotoGroups = null;
     clearPhotosSection();
@@ -2462,10 +2461,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       const li = document.createElement('li');
       li.textContent = `${file.name} ${file.isDirectory ? '(Folder)' : ''}`;
       li.title = `Path: ${file.path}`;
-      li.onclick = () => {
-        if (file.isDirectory) window.electronAPI.openPathInExplorer(file.path);
-        else window.electronAPI.openFile(file.path);
-      };
+    li.onclick = () => {
+      if (file.isDirectory) {
+        window.electronAPI.openPathInExplorer(file.path);
+      } else {
+        openInApp({ path: file.path, name: file.name });
+      }
+    };
       ul.appendChild(li);
     });
     sectionElement.appendChild(ul);
@@ -3628,16 +3630,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     return total;
   }
 
-   /**
-   * Render the “Documents” tab exactly like Photos:
-   * - folder cards for subfolders
-   * - 📄 thumbnails for files
-   * - drill-down/back support
-   */
+  // ─── Documents tab: expandable file‑tree (lazy‑load children) ────────────
+  // State to hold fetched nodes and expansion status
+  let docTreeData = [];
+  const docExpanded = {};
+
   async function renderDocumentsTab(container, stationFolder) {
     container.innerHTML = '';
 
-    // 1) +Add Documents button
+    // "+ Add Documents" button
     const addBtn = document.createElement('button');
     addBtn.textContent = '+ Add Documents';
     addBtn.style.display = 'block';
@@ -3645,227 +3646,323 @@ document.addEventListener('DOMContentLoaded', async () => {
     addBtn.onclick = showAddDocumentsDialog;
     container.appendChild(addBtn);
 
-    // 2) If inside a subfolder, show back + contents of that folder
-    if (currentDocumentFolder) {
+    // Tree root container
+    const treeRoot = document.createElement('div');
+    treeRoot.classList.add('file-tree');
+    container.appendChild(treeRoot);
 
-      // ← Back button
-      const back = document.createElement('button');
-      back.textContent = '← Back to all documents';
-      back.style.marginBottom = '12px';
-      back.onclick = () => {
-        currentDocumentFolder = null;
-        renderDocumentsTab(container, stationFolder);
-      };
-      container.appendChild(back);
+    // Recursive renderer
+    function renderDocs(nodes, parentEl, level = 0) {
+      const ul = document.createElement('ul');
+      ul.classList.add('tree-children');
 
-      showLoadingMessage('Loading documents…');
-      const entries = await window.electronAPI.listDocumentContents(currentDocumentFolder);
-      hideLoadingMessage();
+      nodes.forEach(node => {
+        const li = document.createElement('li');
 
-
-      const { folders, files } = groupDocuments(entries);
-
-      // Sub-folder cards
-      if (folders.length) {
-        const grid = document.createElement('div');
-        grid.style = 'display:flex; flex-wrap:wrap; gap:16px;';
-        for (const f of folders) {
-          // 1) recursively count everything under here
-          const docCount = await countDocuments(f.path);
-
-          // 2) render card
-          const card = document.createElement('div');
-          card.style = 'border:1px solid #ccc; padding:12px; width:140px; text-align:center; cursor:pointer;';
-          card.innerHTML = `
-            <div style="font-size:2em;">📁</div>
-            <div style="margin-top:8px; word-break:break-word;">${f.name}</div>
-            <div style="margin-top:4px; font-size:0.9em; color:#555;">
-              ${docCount} document${docCount === 1 ? '' : 's'}
-            </div>
-          `;
-          card.onclick = () => {
-            currentDocumentFolder = f.path;
-            renderDocumentsTab(container, stationFolder);
-          };
-          grid.appendChild(card);
+        // ── add delete button for folders ───────────────────────
+        if (node.isDirectory) {
+          const delF = document.createElement('button');
+          delF.textContent = '🗑️';
+          delF.title = `Delete folder "${node.name}"`;
+          delF.style.marginLeft = '8px';
+          delF.addEventListener('click', async e => {
+            e.stopPropagation();
+            if (!confirm(`Delete folder "${node.name}" and all its contents?`)) return;
+            const res = await window.electronAPI.deleteFolder(node.path);
+            if (res.success) refreshDocumentsTree();
+            else showAlert(`Error deleting folder: ${res.message}`);
+          });
+          li.appendChild(delF);
         }
-        container.appendChild(grid);
-      }
 
 
-      // File thumbnails
-      if (files.length) {
-        const grid = document.createElement('div');
-        grid.style = 'display:flex; flex-wrap:wrap; gap:12px;';
-        files.forEach(file => {
-          const fileDiv = document.createElement('div');
-          fileDiv.style = 'width:120px; text-align:center; cursor:pointer;';
-          fileDiv.innerHTML = `
-            <div style="font-size:2em;">📄</div>
-            <div style="margin-top:4px; word-break:break-word;">${file.name}</div>`;
-          fileDiv.onclick = () => window.electronAPI.openFile(file.path);
-          grid.appendChild(fileDiv);
-        });
-        container.appendChild(grid);
-      }
+        if (node.isDirectory) {
+          const btn = document.createElement('button');
+          btn.textContent = docExpanded[node.path] ? '[-]' : '[+]';
+          btn.style.marginRight = '8px';
+          btn.addEventListener('click', async () => {
+            // flip this folder
+            const opening = !docExpanded[node.path];
+            docExpanded[node.path] = opening;
 
-      return;
-    }
+            // if opening for the first time, fetch its children
+            if (opening && !node.children) {
+              node.children = await window.electronAPI.listDocumentContents(node.path);
+            }
 
-    // 3) Top-level station folder (no longer hard-coded “…/Documents”)
-    const docsRoot = stationFolder;
+            // if we just collapsed it, also collapse all nested descendants
+            if (!opening) {
+              Object.keys(docExpanded).forEach(key => {
+                if (
+                  key.startsWith(node.path + '/') ||
+                  key.startsWith(node.path + '\\')
+                ) {
+                  docExpanded[key] = false;
+                }
+              });
+            }
 
-    showLoadingMessage('Loading documents…');
-    let entries = [];
-    try {
-      entries = await window.electronAPI.listDocumentContents(docsRoot);
-    } catch (err) {
-      console.error('[Docs] error listing:', err);
-    }
-    hideLoadingMessage();
+            // re‑draw entire tree
+            refreshDocumentsTree();
+          });
+          li.appendChild(btn);
 
+          // Folder label
+          const label = document.createElement('span');
+          label.textContent = node.name;
+          label.classList.add('tree-label');
+          li.appendChild(label);
+          ul.appendChild(li);
 
-    const { folders, files } = groupDocuments(entries);
+          // Render children if expanded
+          if (docExpanded[node.path] && node.children) {
+            renderDocs(node.children, ul, level + 1);
+          }
 
-    // Folder cards
-    if (folders.length) {
-      const grid = document.createElement('div');
-      grid.style = 'display:flex; flex-wrap:wrap; gap:16px; margin-bottom:16px;';
-      for (const f of folders) {
-        const docCount = await countDocuments(f.path);
-        const card = document.createElement('div');
-        card.style = 'border:1px solid #ccc; padding:12px; width:140px; text-align:center; cursor:pointer;';
-        card.innerHTML = `
-          <div style="font-size:2em;">📁</div>
-          <div style="margin-top:8px; word-break:break-word;">${f.name}</div>
-          <div style="margin-top:4px; font-size:0.9em; color:#555;">
-            ${docCount} document${docCount === 1 ? '' : 's'}
-          </div>
-        `;
-        card.onclick = () => {
-          currentDocumentFolder = f.path;
-          renderDocumentsTab(container, stationFolder);
-        };
-        grid.appendChild(card);
-      }
-      container.appendChild(grid);
-    }
+        } else {
+            const fileDiv = document.createElement('div');
+            fileDiv.classList.add('tree-file');
 
-    // Root-level files
-    if (files.length) {
-      const grid = document.createElement('div');
-      grid.style = 'display:flex; flex-wrap:wrap; gap:12px; margin-top:16px;';
-      files.forEach(file => {
-        const fileDiv = document.createElement('div');
-        fileDiv.style = 'width:120px; text-align:center; cursor:pointer;';
-        fileDiv.innerHTML = `
-          <div style="font-size:2em;">📄</div>
-          <div style="margin-top:4px; word-break:break-word;">${file.name}</div>`;
-        fileDiv.onclick = () => window.electronAPI.openFile(file.path);
-        grid.appendChild(fileDiv);
+            // Use a link styled like a native hyperlink
+            const link = document.createElement('a');
+            link.textContent = node.name;
+            link.href = '#';
+            link.style.color = '#0066cc';
+            link.style.textDecoration = 'underline';
+            link.style.cursor = 'pointer';
+            link.addEventListener('click', e => {
+              e.preventDefault();
+              if (node.name.toLowerCase().endsWith('.pdf')) {
+                showPdfOverlay({ path: node.path, name: node.name });
+              } else {
+                window.electronAPI.openFile(node.path);
+              }
+            });
+
+            fileDiv.appendChild(link);
+
+            // ── delete button for files ───────────────────────
+            const del = document.createElement('button');
+            del.textContent = '🗑️';
+            del.title = `Delete file "${node.name}"`;
+            del.style.marginLeft = '8px';
+            del.addEventListener('click', async () => {
+              if (!confirm(`Delete file "${node.name}"?`)) return;
+              const res = await window.electronAPI.deleteFile(node.path);
+              if (res.success) refreshDocumentsTree();
+              else showAlert(`Error deleting file: ${res.message}`);
+            });
+            fileDiv.appendChild(del);
+
+            li.appendChild(fileDiv);
+            ul.appendChild(li);
+          }
       });
-      container.appendChild(grid);
+
+      parentEl.appendChild(ul);
     }
+
+    // Clear & render entire tree
+    async function refreshDocumentsTree() {
+      treeRoot.innerHTML = '';
+      if (docTreeData.length === 0) {
+        docTreeData = await window.electronAPI.listDocumentContents(stationFolder);
+      }
+      renderDocs(docTreeData, treeRoot);
+    }
+
+    // Initial render
+    await refreshDocumentsTree();
   }
 
-
   async function showAddDocumentsDialog() {
+    const root = currentStationDetailData.stationFolder;
+
+    // Inject modern CSS (only once)
+    if (!document.getElementById('add-docs-dialog-styles')) {
+      const style = document.createElement('style');
+      style.id = 'add-docs-dialog-styles';
+      style.textContent = `
+        .dlg-overlay {
+          position: fixed; inset: 0;
+          background: rgba(0,0,0,0.4);
+          display: flex; align-items: center; justify-content: center;
+          z-index: 10000;
+        }
+        .dlg-box {
+          background: #fff;
+          border-radius: 8px;
+          box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+          width: 600px;        /* ↑ was 420px */
+          max-height: 90%;     /* ↑ was 80% */
+          display: flex; flex-direction: column;
+          overflow: hidden;
+          font-family: sans-serif;
+        }
+        .dlg-header {
+          padding: 16px 20px;
+          border-bottom: 1px solid #eee;
+          font-size: 18px; font-weight: 500;
+        }
+        .dlg-body {
+          padding: 12px 20px;
+          flex: 1; overflow: auto;
+        }
+        .folder-tree {
+          border: 1px solid #ddd;
+          border-radius: 4px;
+          height: 360px;
+          overflow-y: auto;
+          padding: 8px;
+          background: #fafafa;
+        }
+        .folder-tree ul {
+          list-style: none;
+          margin: 4px 0;
+          padding-left: 16px;
+        }
+        .folder-tree li {
+          line-height: 1.4;
+          display: flex; align-items: center;
+        }
+        .folder-tree .toggle-btn {
+          width: 16px; height: 16px;
+          margin-right: 6px;
+          font-size: 12px;
+          background: none; border: none;
+          cursor: pointer; color: #555;
+        }
+        .folder-tree .folder-label {
+          cursor: pointer;
+          padding: 2px 4px;
+          border-radius: 4px;
+        }
+        .folder-tree .folder-label.selected {
+          background: #007bff20;
+          color: #007bff;
+          font-weight: 500;
+        }
+        .new-subfolder {
+          margin-top: 14px;
+        }
+        .new-subfolder input {
+          width: 100%;
+          padding: 6px 8px;
+          border: 1px solid #ccc;
+          border-radius: 4px;
+        }
+        .dlg-footer {
+          padding: 12px 20px;
+          border-top: 1px solid #eee;
+          text-align: right;
+        }
+        .dlg-footer button {
+          margin-left: 8px;
+          padding: 6px 14px;
+          font-size: 14px;
+          border-radius: 4px;
+          border: none;
+          cursor: pointer;
+        }
+        .dlg-footer .btn-cancel {
+          background: #f5f5f5;
+          color: #555;
+        }
+        .dlg-footer .btn-ok {
+          background: #007bff;
+          color: white;
+        }
+        .dlg-footer .btn-ok:hover {
+          background: #0069d9;
+        }
+      `;
+      document.head.appendChild(style);
+    }
 
     // 1) Overlay
     const overlay = document.createElement('div');
-    overlay.style = `
-      position:fixed; top:0; left:0; right:0; bottom:0;
-      background:rgba(0,0,0,0.5); display:flex;
-      align-items:center; justify-content:center; z-index:10000;
-    `;
+    overlay.className = 'dlg-overlay';
+    overlay.tabIndex = 0;  // to capture keystrokes
     document.body.appendChild(overlay);
 
-    // 2) Dialog
+    // 2) Dialog container
     const box = document.createElement('div');
-    box.style = 'background:white; padding:20px; border-radius:6px; width:320px;';
+    box.className = 'dlg-box';
     box.innerHTML = `
-      <h3 style="margin-top:0;">Select Destination for Documents</h3>
-      <div>
-        <label><input type="radio" name="destDoc" value="existing" checked> Existing folder</label><br>
-        <select id="existingDocFolderSelect" style="width:100%; margin:6px 0;"></select>
+      <div class="dlg-header">Select Destination Folder</div>
+      <div class="dlg-body">
+        <div id="folderTree" class="folder-tree"></div>
+        <div class="new-subfolder">
+          <label>New sub‑folder (optional):</label>
+          <input type="text" id="newSubfolder" placeholder="Folder name"/>
+        </div>
       </div>
-      <div>
-        <label><input type="radio" name="destDoc" value="new"> New folder</label><br>
-        <input type="text" id="newDocFolderName"
-              placeholder="Folder name"
-              style="width:100%; margin:6px 0;" disabled>
-      </div>
-      <div>
-        <label><input type="radio" name="destDoc" value="root"> Documents root</label>
-      </div>
-      <div style="text-align:right; margin-top:12px;">
-        <button id="cancelAddDocuments">Cancel</button>
-        <button id="okAddDocuments">Next →</button>
+      <div class="dlg-footer">
+        <button id="cancelAddDocs" class="btn-cancel">Cancel</button>
+        <button id="okAddDocs" class="btn-ok">Next →</button>
       </div>
     `;
     overlay.appendChild(box);
 
-    // ─── Keyboard handling ───────────────────────────────────────────────
-    function docsKeyHandler(e) {
-      if (e.key === 'Escape') {
-        document.removeEventListener('keydown', docsKeyHandler);
-        overlay.remove();
-      }
-      if (e.key === 'Enter') {
-        document.removeEventListener('keydown', docsKeyHandler);
-        box.querySelector('#okAddDocuments').click();
-      }
-    }
-    document.addEventListener('keydown', docsKeyHandler);
+    // 3) Build tree view
+    const treeRoot = box.querySelector('#folderTree');
+    let selectedPath = root;
 
-    // 3) Fetch & populate existing subfolders 
-    const root = currentStationDetailData.stationFolder;
-    let subs = [];
-    try {
-      const entries = await window.electronAPI.listDocumentContents(root);
-      subs = entries.filter(e => e.isDirectory).map(e => e.name);
-    } catch (err) {
-      console.error('[AddDocuments] error listing subfolders:', err);
-    }
-    const sel = box.querySelector('#existingDocFolderSelect');
-    subs.forEach(name => {
-      const o = document.createElement('option');
-      o.value = name; o.textContent = name;
-      sel.appendChild(o);
-    });
+    async function buildTree(dirPath, parentEl) {
+      const items = await window.electronAPI.listDocumentContents(dirPath);
+      const ul = document.createElement('ul');
+      for (const e of items.filter(i => i.isDirectory)) {
+        const li = document.createElement('li');
+        const btn = document.createElement('button');
+        btn.textContent = '[+]';
+        btn.className = 'toggle-btn';
 
-    // 4) Radio buttons enable/disable new-folder input
-    const newInput = box.querySelector('#newDocFolderName');
-    box.querySelectorAll('input[name="destDoc"]').forEach(radio => {
-      radio.addEventListener('change', () => {
-        newInput.disabled = (radio.value !== 'new');
-      });
-    });
-
-    // 5) Cancel
-    box.querySelector('#cancelAddDocuments').onclick = () => {
-      overlay.remove();
-    };
-
-    // 6) Next → pick files, copy, toast, re-render
-    box.querySelector('#okAddDocuments').onclick = async () => {
-      const choice = box.querySelector('input[name="destDoc"]:checked').value;
-      let dest = root;
-      if (choice === 'existing') {
-        dest = `${root}/${sel.value}`;
-      } else if (choice === 'new') {
-        const nm = newInput.value.trim();
-        if (!nm) {
-          showAlert('Please type a folder name.', 2000);
-          return;
+        const label = document.createElement('span');
+        label.textContent = e.name;
+        label.className = 'folder-label';
+        if (`${dirPath}/${e.name}` === selectedPath) {
+          label.classList.add('selected');
         }
-        dest = `${root}/${nm}`;
+
+        btn.addEventListener('click', async () => {
+          if (btn.textContent === '[+]') {
+            btn.textContent = '[-]';
+            await buildTree(`${dirPath}/${e.name}`, li);
+          } else {
+            btn.textContent = '[+]';
+            const nested = li.querySelector('ul');
+            if (nested) li.removeChild(nested);
+          }
+        });
+
+        label.addEventListener('click', () => {
+          // clear old
+          treeRoot.querySelectorAll('.folder-label.selected')
+            .forEach(el => el.classList.remove('selected'));
+          label.classList.add('selected');
+          selectedPath = `${dirPath}/${e.name}`;
+        });
+
+        li.append(btn, label);
+        ul.appendChild(li);
       }
+      parentEl.appendChild(ul);
+    }
+
+    await buildTree(root, treeRoot);
+
+    // 4) Cancel
+    box.querySelector('#cancelAddDocs').onclick = () => overlay.remove();
+
+    // 5) OK → choose files and copy
+    box.querySelector('#okAddDocs').onclick = async () => {
+      const sub = box.querySelector('#newSubfolder').value.trim();
+      const dest = sub ? `${selectedPath}/${sub}` : selectedPath;
       overlay.remove();
 
-      // reuse file-picker but allow all documents
       const files = await window.electronAPI.selectDocumentFiles();
       if (!files.length) return;
+
       showLoadingMessage('Adding documents…');
       const res = await window.electronAPI.addDocuments(dest, files);
       hideLoadingMessage();
@@ -3874,14 +3971,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         alert(`Error adding documents: ${res.message}`);
       } else {
         showSuccess('Documents saved!', 1500);
-        // clear any cache & re-render documents tab in-place:
-        loadedDocumentGroups = null;
-        currentDocumentFolder = null;
-        // switch to documents tab:
-        document.querySelector('.detail-nav-btn[data-section="documents"]').click();
+        document.querySelector('.detail-nav-btn[data-section="documents"]')
+                .click();
       }
     };
+
+    // keyboard support
+    overlay.addEventListener('keydown', e => {
+      if (e.key === 'Escape') overlay.remove();
+      if (e.key === 'Enter') box.querySelector('#okAddDocs').click();
+    });
+
+    // focus for keydown
+    overlay.focus();
   }
+
 
   // ────────────────────────────────────────────────────────────────────────────
   // Renders the Inspection History tab as a timeline with up to 5 thumbnails,
@@ -4204,6 +4308,54 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.body.appendChild(overlay);
   }
 
+  
+  /**
+  * Opens a file in‑app based on its extension.
+  * @param {{path: string, name: string}} file
+  */
+  function openInApp(file) {
+    const ext = (file.name.split('.').pop() || '').toLowerCase();
+    // Images
+    if (['png','jpg','jpeg','gif','bmp','webp'].includes(ext)) {
+      showImageOverlay(file);
+    }
+    // PDFs
+    else if (ext === 'pdf') {
+      showPdfOverlay(file);
+    }
+    // Everything else
+    else {
+      showGenericOverlay(file);
+    }
+  }
+
+  /**
+    * Show any file inside an <iframe> overlay.
+    */
+  function showGenericOverlay(file) {
+    const overlay = document.createElement('div');
+    overlay.style = `
+      position: fixed; top:0; left:0; right:0; bottom:0;
+      background: rgba(0,0,0,0.8);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 10000;
+    `;
+    overlay.addEventListener('click', () => overlay.remove());
+
+    const frame = document.createElement('iframe');
+    frame.src = `file://${file.path}`;
+    frame.style = `
+      width: 90%; height: 90%; border: none;
+      background: white; box-shadow: 0 0 10px rgba(0,0,0,0.5);
+    `;
+    // Prevent clicks inside from closing
+    frame.addEventListener('click', e => e.stopPropagation());
+
+    overlay.appendChild(frame);
+    document.body.appendChild(overlay);
+  }
+  
+
   /**
    * showAddInspectionDialog(stationId)
    * Opens a modal to add date/name/author/comment + select photos + PDF.
@@ -4356,7 +4508,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           block.remove();
         });
       }
-      
+
     });
 
     overlay.appendChild(box);

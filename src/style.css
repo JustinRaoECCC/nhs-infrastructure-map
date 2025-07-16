@@ -896,3 +896,66 @@ body, html {
 .inspection-repairs .ranking-0,
 .inspection-repairs .ranking- { background: grey; }
 
+.file-tree {
+  font-family: Arial, sans-serif;
+  font-size: 18px;
+  color: #333;
+  line-height: 1.6;
+  overflow-x: auto;        /* horizontal scroll if too wide */
+  white-space: nowrap;     /* don’t wrap long file names */
+}
+
+.file-tree ul {
+  list-style: none;        /* remove bullets */
+  margin: 0;
+  padding-left: 1em;       /* indent each nested level */
+}
+
+.file-tree li {
+  margin: 6px 0;
+  display: flex;
+  align-items: center;
+}
+
+.tree-label {
+  cursor: pointer;
+  user-select: none;
+}
+
+.tree-label::before {
+  content: '►';
+  display: inline-block;
+  width: 1.2em;
+  margin-right: 8px;
+  transition: transform 0.2s, content 0.2s;
+}
+
+.tree-label.expanded::before {
+  content: '▼';
+}
+
+.tree-children.collapsed {
+  display: none;
+}
+
+/* When a folder is expanded, the UL inside it just inherits the padding-left,
+   so each deeper level is indented another 1em */
+.tree-children {
+  display: block;
+}
+
+/* style your file‐links */
+.tree-file {
+  flex: 1;
+}
+
+.tree-file a {
+  text-decoration: none;
+  color: #007bff;
+  cursor: pointer;
+  display: inline-block;
+}
+
+.tree-file a:hover {
+  text-decoration: underline;
+}

@@ -91,6 +91,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   listDocumentContents:     (dirPath)            => ipcRenderer.invoke('list-document-contents', dirPath),
   selectDocumentFiles:      ()                   => ipcRenderer.invoke('select-document-files'),
   addDocuments:             (destFolder, files)  => ipcRenderer.invoke('add-documents', destFolder, files),
+  deleteFile:               (filePath)           => ipcRenderer.invoke('delete-file', filePath),
 
   deleteStation: (stationId) => ipcRenderer.invoke('delete-station', stationId),
 

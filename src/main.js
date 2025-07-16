@@ -1797,6 +1797,20 @@ ipcMain.handle('read-json-file', async (_evt, filePath) => {
   }
 });
 
+/**
+ * IPC handler: delete a single file
+ */
+ipcMain.handle('delete-file', async (_evt, filePath) => {
+  try {
+    await fsPromises.unlink(filePath);
+    return { success: true };
+  } catch (err) {
+    console.error('delete-file error:', err);
+    return { success: false, message: err.message };
+  }
+});
+
+
 
 // ─── Electron Window Setup ──────────────────────────────────────────────────
 
