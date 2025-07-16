@@ -1142,6 +1142,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // --------------------------------------------------------------------------------
   // Replace your entire function displayStationDetailsQuickView with this:
   function displayStationDetailsQuickView(station) {
+    
     // Make a local copy for consistency with full-detail page
     currentEditingStation = JSON.parse(JSON.stringify(station));
     detailsPanelContent.innerHTML = '';

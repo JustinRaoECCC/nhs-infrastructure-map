@@ -676,9 +676,9 @@ ipcMain.handle('get-station-data', async () => {
       await wb.xlsx.readFile(repairsFile);
       const ws = wb.worksheets[0];
 
-      // collect every “Repair Ranking” value (column A)
+      // collect every “Repair Ranking” value (column B)
       const ranks = [];
-      ws.getColumn(1).values.slice(2).forEach(v => {
+      ws.getColumn(2).values.slice(2).forEach(v => {
         const n = parseInt(v, 10);
         if (!isNaN(n)) ranks.push(n);
       });
@@ -687,11 +687,11 @@ ipcMain.handle('get-station-data', async () => {
         const maxRank = Math.max(...ranks);
         station['Repair Ranking'] = maxRank;
 
-        // find the row with that maxRank to grab cost & frequency
+        // find the row with that maxRank and inject cost (col C) & freq (col D)
         for (let r = 2; r <= ws.rowCount; r++) {
-          if (parseInt(ws.getRow(r).getCell(1).value, 10) === maxRank) {
-            station['Repair Cost'] = parseFloat(ws.getRow(r).getCell(2).value) || 0;
-            station['Frequency']   = ws.getRow(r).getCell(3).value     || '';
+          if (parseInt(ws.getRow(r).getCell(2).value, 10) === maxRank) {
+            station['Repair Cost'] = parseFloat(ws.getRow(r).getCell(3).value) || 0;
+            station['Frequency']   = ws.getRow(r).getCell(4).value     || '';
             break;
           }
         }
